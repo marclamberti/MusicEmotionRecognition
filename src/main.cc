@@ -90,7 +90,6 @@ std::string	GetFileExtension(std::string file) {
 
 int 	ExecCommand(std::string const &cmd) {
 	int		status;
-	int		value;
 	pid_t	pid;
 	
 	if ((pid = fork()) < 0) {
@@ -141,7 +140,7 @@ bool	normalize_dataset(std::string const &directory) {
 		return false;
 	}
 
-	while (pdir = readdir(dir)) {
+	while ((pdir = readdir(dir))) {
 		if (pdir->d_type == DT_REG) {
 			 ProcessSound(pdir->d_name, directory);
 		}

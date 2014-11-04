@@ -1,0 +1,8 @@
+#ignore binary
+MusicEmotionRecognition
+
+#ignore objects
+*.o
+
+#ignore OSX files
+.DS_Store

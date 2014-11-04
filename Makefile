@@ -1,6 +1,6 @@
 CC	= g++ -std=c++11
 CFLAGS 	= -c -Wall
-LDFLAGS = -lavcodec -lavformat -lavutil -lz -lm
+LDFLAGS = -lavcodec -lavformat -lavutil -lz -lm -laubio
 SRCS	= $(wildcard src/*.cc)
 OBJS	= $(SRCS:.cc=.o)
 BIN	= MusicEmotionRecognition

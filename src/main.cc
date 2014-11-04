@@ -15,7 +15,6 @@ std::string	GetFileExtension(std::string file) {
 
 int 	ExecCommand(std::string const &cmd) {
 	int		status;
-	int		value;
 	pid_t	pid;
 	
 	if ((pid = fork()) < 0) {
@@ -46,11 +45,11 @@ void	ProcessSound(std::string const &file, std::string const &directory) {
 	if (extension == "mp3") {
 		std::string filename = file.substr(0, file.length() - (extension.length() + 1));
 		std::string cmd = "ffmpeg -i \"" + directory + "/" + file 
-						+ "\" -ar 44100 -ac 1 -codec:a libmp3lame -b:a 128k\"" + directory 
-						+ "/" + filename + ".wav\"";
+						+ "\" -ar 44100 -ac 1 -codec:a libmp3lame -b:a 128k \"" 
+						+ directory + "/" + filename + ".wav\"";
 		ExecCommand(cmd);
 		cmd = "ffmpeg -i \"" + directory + "/" + filename + ".wav" 
-						+ "\" -ss 00:00:45 -t 00:01:45 -acodec copy \"" + directory 
+						+ "\" -ss 00:00:45 -t 00:01:00 -acodec copy \"" + directory 
 						+ "/" + filename + "_60_seconds.wav\"";
 		ExecCommand(cmd);
 	}
@@ -66,7 +65,7 @@ bool	normalize_dataset(std::string const &directory) {
 		return false;
 	}
 
-	while (pdir = readdir(dir)) {
+	while ((pdir = readdir(dir))) {
 		if (pdir->d_type == DT_REG) {
 			 ProcessSound(pdir->d_name, directory);
 		}

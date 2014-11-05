@@ -13,8 +13,8 @@ namespace {
 
 bool	getBeat(const std::string &file) {
 	aubio_tempo_t 		*tempo;
-  	uint_t 				win_size 		= 1024;
-  	uint_t 				hop_size 		= win_size / 4;
+  	uint_t 				win_size 		= 512;
+  	uint_t 				hop_size 		= 512 / 4;
   	uint_t 				n_frames 		= 0;
   	uint_t				read 			= 0;
 	aubio_source_t		*aubio_source 	= NULL;
@@ -76,8 +76,41 @@ bool	getBeat(const std::string &file) {
   	return true;
 }
 
+/**
+ * Read the sound file and display a block of hop_size samples
+ * @param  file the soung file
+ * @return      true if there was no error, otherwise false
+ */
+bool	readWav(const std::string &file) {
+	uint_t 	samplerate = 0;
+  	uint_t 	hop_size = 256;
+  	uint_t 	n_frames = 0;
+  	uint_t	read = 0;
+
+  	aubio_source_t *aubio_source = new_aubio_source(const_cast<char *>(file.c_str()), samplerate, hop_size);
+  	if (!aubio_source) {
+  		std::cerr << "new_aubio_source failed" << std::endl;
+  		return false;
+  	}
+  	
+  	fvec_t *vec = new_fvec(hop_size);
+  	samplerate =  aubio_source_get_samplerate(aubio_source);
+
+  	do {
+  		aubio_source_do(aubio_source, vec, &read);
+  		fvec_print(vec);
+  		n_frames += read;
+  	} while (read == hop_size);
+
+  	std::cout << "read " << n_frames << " frames at " << samplerate << "Hz (" << n_frames / hop_size << " blocks) from " << file << std::endl;
+	del_fvec(vec);
+ 	del_aubio_source(aubio_source);
+  	return true;
+}
+
 void	getFeatures(const std::string &file) {
-	getBeat(file);
+	readWav(file);
+	//getBeat(file);
 }
 
 

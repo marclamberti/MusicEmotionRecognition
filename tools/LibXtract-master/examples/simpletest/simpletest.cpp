@@ -128,7 +128,7 @@ int main(void)
     int n;
     int rv = XTRACT_SUCCESS;
     double last_found_peak_time = 0.0;
-    WaveFile wavFile("test.wav");
+    WaveFile wavFile("sandoval.wav");
     xtract_mel_filter mel_filters;
     xtract_last_n_state *last_n_state = xtract_last_n_state_new(MAVG_COUNT);
 
@@ -140,8 +140,7 @@ int main(void)
     float *wavData = (float *)wavFile.GetData(); // assume 32-bit float
     std::size_t wavBytes = wavFile.GetDataSize();
     uint64_t wavSamples = wavBytes / sizeof(float);
-    double data[wavSamples];
-    
+    double *data = new double[wavSamples];
     for (n = 0; n < wavSamples; ++n)
     {
         data[n] = (double)wavData[n];

@@ -153,11 +153,11 @@ void	ProcessSound(std::string const &file, std::string const &directory) {
 	if (extension == "mp3") {
 		std::string filename = file.substr(0, file.length() - (extension.length() + 1));
 		std::string cmd = "ffmpeg -i \"" + directory + "/" + file 
-						+ "\" -ar 44100 -ac 1 -codec:a libmp3lame -b:a 128k\"" + directory 
-						+ "/" + filename + ".wav\"";
+						+ "\" -ar 44100 -ac 1 -codec:a libmp3lame -b:a 128k \"" 
+						+ directory + "/" + filename + ".wav\"";
 		ExecCommand(cmd);
 		cmd = "ffmpeg -i \"" + directory + "/" + filename + ".wav" 
-						+ "\" -ss 00:00:45 -t 00:01:45 -acodec copy \"" + directory 
+						+ "\" -ss 00:00:45 -t 00:01:00 -acodec copy \"" + directory 
 						+ "/" + filename + "_60_seconds.wav\"";
 		ExecCommand(cmd);
 	}

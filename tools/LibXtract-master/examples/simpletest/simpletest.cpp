@@ -128,7 +128,7 @@ int main(void)
     int n;
     int rv = XTRACT_SUCCESS;
     double last_found_peak_time = 0.0;
-    WaveFile wavFile("eiffel65.wav");
+    WaveFile wavFile("clas_10.wav");
     xtract_mel_filter mel_filters;
     xtract_last_n_state *last_n_state = xtract_last_n_state_new(MAVG_COUNT);
 
@@ -175,9 +175,7 @@ int main(void)
     for (uint64_t n = 0; (n + BLOCKSIZE) < wavSamples; n += HALF_BLOCKSIZE) // Overlap by HALF_BLOCKSIZE
     {
         /* get the F0 */
-        if (xtract[XTRACT_F0](&data[n], BLOCKSIZE, &samplerate, &f0) != XTRACT_SUCCESS) {
-            std::cout << "fail f0" << std::endl;
-        }
+        xtract[XTRACT_WAVELET_F0](&data[n], BLOCKSIZE, &samplerate, &f0);
         
         /* get the F0 as a MIDI note */
         if (f0 != 0.0)
@@ -204,6 +202,7 @@ int main(void)
         xtract_free_fft();
 
         xtract[XTRACT_SPECTRAL_CENTROID](spectrum, BLOCKSIZE, NULL, &centroid);
+        std::cout << "centroid : " << centroid << std::endl;
         argd[1] = 10.0; /* peak threshold as %  of maximum peak */
         xtract[XTRACT_PEAK_SPECTRUM](spectrum, BLOCKSIZE / 2, argd, peaks);
 

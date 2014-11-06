@@ -4,5 +4,8 @@ MusicEmotionRecognition
 #ignore objects
 *.o
 
+#ignore .wav
+*.wav
+
 #ignore OSX files
 .DS_Store

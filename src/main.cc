@@ -9,12 +9,14 @@
 
 namespace {
 	std::vector<std::vector<float>> features;
+
+	const int size = 512;
 }
 
 bool	getBeat(const std::string &file) {
 	aubio_tempo_t 		*tempo;
-  	uint_t 				win_size 		= 512;
-  	uint_t 				hop_size 		= 512 / 4;
+  	uint_t 				win_size 		= size;
+  	uint_t 				hop_size 		= size / 4;
   	uint_t 				n_frames 		= 0;
   	uint_t				read 			= 0;
 	aubio_source_t		*aubio_source 	= NULL;
@@ -78,7 +80,7 @@ bool	getBeat(const std::string &file) {
 
 // http://iub.edu/~emusic/etext/synthesis/chapter4_pv.shtml
 bool	getFundamentalFrequencies(const fvec_t *samples) {
-	uint_t		window_size = 256;
+	uint_t		window_size = size;
   	fvec_t		*win;
   	fvec_t		*winput;
   	aubio_fft_t	*fft;
@@ -190,23 +192,17 @@ int 	ExecCommand(std::string const &cmd) {
  * Ugly implementation
  * @param file to process and directory in which we should put the processed sound.
  */
-void	ProcessSound(std::string const &file, std::string const &directory) {
+void	ProcessSoundMidiToWave(std::string const &file, std::string const &directory) {
 	std::string extension = GetFileExtension(file);
 	if (extension == "mp3") {
 		std::string filename = file.substr(0, file.length() - (extension.length() + 1));
-		std::string cmd = "ffmpeg -i \"" + directory + "/" + file 
-						+ "\" -ar 44100 -ac 1 -codec:a libmp3lame -b:a 128k \"" 
-						+ directory + "/" + filename + ".wav\"";
-		ExecCommand(cmd);
-		cmd = "ffmpeg -i \"" + directory + "/" + filename + ".wav" 
-						+ "\" -ss 00:00:45 -t 00:01:00 -acodec copy \"" + directory 
-						+ "/" + filename + "_60_seconds.wav\"";
+		std::string cmd = "timidity -OwM \"" + directory + "/" + file + "\"";
 		ExecCommand(cmd);
 	}
 }
 
 
-bool	normalize_dataset(std::string const &directory) {
+bool	NormalizeDataSet(std::string const &directory) {
 	DIR		*dir;
 	dirent	*pdir;
 
@@ -217,7 +213,7 @@ bool	normalize_dataset(std::string const &directory) {
 
 	while ((pdir = readdir(dir))) {
 		if (pdir->d_type == DT_REG) {
-			 ProcessSound(pdir->d_name, directory);
+			 ProcessSoundMidiToWave(pdir->d_name, directory);
 		}
 	}
 	closedir(dir);

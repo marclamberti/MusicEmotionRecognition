@@ -76,6 +76,48 @@ bool	getBeat(const std::string &file) {
   	return true;
 }
 
+// http://iub.edu/~emusic/etext/synthesis/chapter4_pv.shtml
+bool	getFundamentalFrequencies(const fvec_t *samples) {
+	uint_t		window_size = 256;
+  	fvec_t		*win;
+  	fvec_t		*winput;
+  	aubio_fft_t	*fft;
+  	cvec_t 		*fftOut;
+
+  	if (!(fftOut = new_cvec(window_size))) {
+  		std::cerr << "new_cvec for fft failed" << std::endl;
+  		return false;
+  	}
+  	if (!(winput = new_fvec(window_size))) {
+  		std::cerr << "new_cvec for winput failed" << std::endl;
+  		return false;  		
+  	}
+  	// Create a envelope called windowing function
+  	// The blocks of samples will be multiplied by it
+  	// The shape of this window has an effect on the weighting of the resultant analysis
+  	// We use the Hanning's method
+  	std::string window_method = "hanning";
+  	if (!(win = new_aubio_window(const_cast<char *>(window_method.c_str()), window_size))) {
+  		std::cerr << "new_aubio_window for fft failed" << std::endl;
+  		del_cvec (fftOut);
+  		return false;
+  	}
+
+  	// Create the fft with the window size
+	if (!(fft = new_aubio_fft(window_size))) {
+		std::cerr << "new_aubio_fft failed" << std::endl;
+		return false;
+	}
+
+	// Multiply the block by the envelope (windowing function)
+	for (int i = 0; i < window_size; ++i) {
+		winput->data[i] = win->data[i] * samples->data[i];
+	}
+
+
+	return true;
+}
+
 /**
  * Read the sound file and display a block of hop_size samples
  * @param  file the soung file
@@ -109,8 +151,8 @@ bool	readWav(const std::string &file) {
 }
 
 void	getFeatures(const std::string &file) {
-	readWav(file);
-	//getBeat(file);
+	//readWav(file);
+	getBeat(file);
 }
 
 
@@ -183,7 +225,7 @@ bool	normalize_dataset(std::string const &directory) {
 }
 
 int main(int ac, char **av){
-	getFeatures("nflikeabird.wav");/*
+	getFeatures("eiffel65.wav");/*
 	if (ac < 2) {
 		std::cout << "Usage:" << av[0] << " <training_directory>" << std::endl;
 		return 1;

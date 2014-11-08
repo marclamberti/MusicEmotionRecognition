@@ -214,22 +214,21 @@ void	MidiFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 void	ExtractSpectrumCentroids(std::vector<double> &wav_data, double *window, std::uint64_t sample_rate, uint64_t i) {
 	std::array<double, 4> argv;
 	std::array<double, kBlockSize> windowed;
+	std::array<double, kBlockSize> spectrum;
+	double centroid = 0.0;
 
     argv[0] = sample_rate / (float)kBlockSize;
-    argv[1] = XTRACT_MAGNITUDE_SPECTRUM;
-    argv[2] = 0.f;
-    argv[3] = 0.f;
+    argv[1] = XTRACT_MAGNITUDE_SPECTRUM; // Determine the spectrum type
+    argv[2] = 0.f; // Whether or not the DC component is included in the output
+    argv[3] = 0.f; // Whether the magnitude/power coefficients are to be normalised
 
     xtract_windowed(&wav_data[i], kBlockSize, window, windowed.data());
+   	xtract_init_fft(kBlockSize, XTRACT_SPECTRUM);
+   	xtract[XTRACT_SPECTRUM](windowed.data(), kBlockSize, &argv[0], spectrum.data());
+  	xtract_free_fft();
 
-    /*
-        xtract_init_fft(BLOCKSIZE, XTRACT_SPECTRUM);
-        xtract[XTRACT_SPECTRUM](windowed, BLOCKSIZE, &argd[0], spectrum);
-        xtract_free_fft();
-
-        xtract[XTRACT_SPECTRAL_CENTROID](spectrum, BLOCKSIZE, NULL, &centroid);
-        std::cout << "centroid : " << centroid << std::endl;
-	*/
+	xtract[XTRACT_SPECTRAL_CENTROID](spectrum.data(), kBlockSize, NULL, &centroid);
+    std::cout << "centroid : " << centroid << std::endl;
 }
 
 void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {

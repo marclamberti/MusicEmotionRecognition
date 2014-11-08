@@ -95,6 +95,17 @@ namespace {
 		NUMBER_OF_FEATURES
 	};
 
+	const int kValenceIndex = 11;
+	const int kArousalIndex = 12;
+	const int kLabelIndex = std::min(kArousalIndex, kValenceIndex);
+
+	enum LabelTypes {
+		AROUSAL,
+		VALENCE,
+		MULTILABEL,
+		NUMBER_OF_LABEL_TYPES,
+	};
+
 }
 
 std::string	GetFileExtension(std::string file) {
@@ -200,11 +211,13 @@ void	MidiFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	tuple[GENDER] = static_cast<float>(ExtractGender(song_id));
 }
 
-void	ExtractSpectrumCentroids() {
+void	ExtractSpectrumCentroids(std::uint64_t sample_rate) {
 	std::array<float, 4> argv;
 	float *window;
 
 	window = (float *)xtract_init_window(kBlockSize, XTRACT_HANN);
+
+
 }
 
 void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
@@ -216,8 +229,14 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	std::size_t bytes = wav_file.GetDataSize();
 	std::uint64_t samples = bytes / sizeof(float);
 	std::vector<float> wav_data(samples);
+	std::uint64_t sample_rate = wav_file.GetSampleRate();
 	std::copy(data, data + samples, wav_data.begin());
-
+	std::cout << "[WAVE] Bytes : " << bytes << std::endl;
+	std::cout << "[WAVE] Samples : " << samples << std::endl;
+	std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
+	for (uint64_t n = 0; (n + kBlockSize) < samples; n += (kBlockSize >> 1)) {
+		ExtractSpectrumCentroids(sample_rate);
+	}
 }
 
 void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path, std::string const &song_wav_path) {
@@ -230,17 +249,6 @@ void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	std::cout << "The key is : " << tuple[KEY] << std::endl;
 	std::cout << "The gender is : " << tuple[GENDER] << std::endl;
 }
-
-int kValenceIndex = 11;
-int kArousalIndex = 12;
-int kLabelIndex = std::min(kArousalIndex, kValenceIndex);
-
-enum LabelTypes {
-	AROUSAL,
-	VALENCE,
-	MULTILABEL,
-	NUMBER_OF_LABEL_TYPES,
-};
 
 std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {
 	std::string formatted_tuple;

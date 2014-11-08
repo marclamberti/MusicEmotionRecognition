@@ -231,17 +231,6 @@ void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	std::cout << "The gender is : " << tuple[GENDER] << std::endl;
 }
 
-int kValenceIndex = 11;
-int kArousalIndex = 12;
-int kLabelIndex = std::min(kArousalIndex, kValenceIndex);
-
-enum LabelTypes {
-	AROUSAL,
-	VALENCE,
-	MULTILABEL,
-	NUMBER_OF_LABEL_TYPES,
-};
-
 std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {
 	std::string formatted_tuple;
 

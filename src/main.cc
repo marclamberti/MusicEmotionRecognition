@@ -95,6 +95,17 @@ namespace {
 		NUMBER_OF_FEATURES
 	};
 
+	const int kValenceIndex = 11;
+	const int kArousalIndex = 12;
+	const int kLabelIndex = std::min(kArousalIndex, kValenceIndex);
+
+	enum LabelTypes {
+		AROUSAL,
+		VALENCE,
+		MULTILABEL,
+		NUMBER_OF_LABEL_TYPES,
+	};
+
 }
 
 std::string	GetFileExtension(std::string file) {
@@ -200,24 +211,49 @@ void	MidiFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	tuple[GENDER] = static_cast<float>(ExtractGender(song_id));
 }
 
-void	ExtractSpectrumCentroids() {
-	std::array<float, 4> argv;
-	float *window;
+void	ExtractSpectrumCentroids(std::vector<double> &wav_data, double *window, std::uint64_t sample_rate, uint64_t i) {
+	std::array<double, 4> argv;
+	std::array<double, kBlockSize> windowed;
+	std::array<double, kBlockSize> spectrum;
+	double centroid = 0.0;
 
-	window = (float *)xtract_init_window(kBlockSize, XTRACT_HANN);
+    argv[0] = sample_rate / (float)kBlockSize;
+    argv[1] = XTRACT_MAGNITUDE_SPECTRUM; // Determine the spectrum type
+    argv[2] = 0.f; // Whether or not the DC component is included in the output
+    argv[3] = 0.f; // Whether the magnitude/power coefficients are to be normalised
+
+    xtract_windowed(&wav_data[i], kBlockSize, window, windowed.data());
+   	xtract_init_fft(kBlockSize, XTRACT_SPECTRUM);
+   	xtract[XTRACT_SPECTRUM](windowed.data(), kBlockSize, &argv[0], spectrum.data());
+  	xtract_free_fft();
+
+	xtract[XTRACT_SPECTRAL_CENTROID](spectrum.data(), kBlockSize, NULL, &centroid);
+    std::cout << "centroid : " << centroid << std::endl;
 }
 
 void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
+	double *window = NULL;
+
 	WaveFile wav_file(song_wav_path);
 	if (!wav_file.IsLoaded()) {
 		return;
 	}
+
 	float *data = (float *)wav_file.GetData();
 	std::size_t bytes = wav_file.GetDataSize();
 	std::uint64_t samples = bytes / sizeof(float);
-	std::vector<float> wav_data(samples);
+	std::vector<double> wav_data(samples);
+	std::uint64_t sample_rate = wav_file.GetSampleRate();
 	std::copy(data, data + samples, wav_data.begin());
 
+	std::cout << "[WAVE] Bytes : " << bytes << std::endl;
+	std::cout << "[WAVE] Samples : " << samples << std::endl;
+	std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
+
+	window = xtract_init_window(kBlockSize, XTRACT_HANN);
+	for (uint64_t i = 0; (i + kBlockSize) < samples; i += (kBlockSize >> 1)) {
+		ExtractSpectrumCentroids(wav_data, window, sample_rate, i);
+	}
 }
 
 void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path, std::string const &song_wav_path) {
@@ -279,6 +315,6 @@ int main(int ac, char **av){
 		if (song_id < 9)
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
 	}
-	FormatDatasetAndWriteInFile(data_set, "test.txt", LabelTypes::AROUSAL);
+	//FormatDatasetAndWriteInFile(data_set, "test.txt", LabelTypes::AROUSAL);
     return 0;
 }

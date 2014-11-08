@@ -3,6 +3,7 @@ MusicEmotionRecognition
 
 #ignore objects
 *.o
+src/*.o
 
 #ignore .wav
 *.wav

@@ -1,12 +1,12 @@
-#include <iostream>
-#include <string>
+#include <aubio/aubio.h>
 #include <dirent.h>
-#include <unistd.h>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <string>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sstream>
-#include <aubio/aubio.h>
-#include <map>
 #include <unistd.h>
 #include <vector>
 #include <cstdint>
@@ -231,6 +231,51 @@ void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	std::cout << "The gender is : " << tuple[GENDER] << std::endl;
 }
 
+int kValenceIndex = 11;
+int kArousalIndex = 12;
+int kLabelIndex = std::min(kArousalIndex, kValenceIndex);
+
+enum LabelTypes {
+	AROUSAL,
+	VALENCE,
+	MULTILABEL,
+	NUMBER_OF_LABEL_TYPES,
+};
+
+std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {
+	std::string formatted_tuple;
+
+	if (lt == LabelTypes::AROUSAL || lt == LabelTypes::MULTILABEL)
+		formatted_tuple += std::to_string(tuple[kArousalIndex]);
+	if (lt == LabelTypes::VALENCE || lt == LabelTypes::MULTILABEL)
+		formatted_tuple += std::to_string(tuple[kArousalIndex]);
+
+	int i = 1;
+	for (auto const &attribute : tuple) {
+		if (i <= kLabelIndex)
+			formatted_tuple += " " + std::to_string(i++) + ':' + std::to_string(attribute);
+	}
+	return formatted_tuple;
+}
+
+void FormatDatasetAndWriteInFile(std::vector<std::vector<float>> const &data_set, std::string const &filename,
+								 enum LabelTypes lt) {
+	std::ofstream output_file_stream(filename.c_str(), std::fstream::out);
+
+	if (!output_file_stream.is_open()) {
+		std::cerr << "Cannot open the file " << filename << std::endl;
+		return;
+	}
+
+	for (auto const &tuple : data_set) {
+		std::string line = FormatTuple(tuple, lt);
+		std::cout << "The line : " << line << std::endl;
+		line += '\n';
+		output_file_stream << line;
+	}
+	output_file_stream.close();
+}
+
 int main(int ac, char **av){
 	std::vector<std::vector<float>> data_set(kNumberOfClassicalSong + kNumberOfJazzSong); 
 	
@@ -245,5 +290,6 @@ int main(int ac, char **av){
 		if (song_id < 9)
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
 	}
+	FormatDatasetAndWriteInFile(data_set, "test.txt", LabelTypes::AROUSAL);
     return 0;
 }

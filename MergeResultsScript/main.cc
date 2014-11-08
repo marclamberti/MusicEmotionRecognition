@@ -44,7 +44,7 @@ int main(int ac, char **av) {
 						" Marc> <filename Rossi> <output file>" << std::endl;
 	}
 	std::vector<std::ifstream> input_file_streams(3);
-	std::ofstream output_file_stream(av[ac - 1]);
+	std::ofstream output_file_stream(av[ac - 1], std::fstream::out);
 
 	if (!output_file_stream.is_open()) {
 		std::cerr << "Cannot open the file " << av[ac - 1] << std::endl;

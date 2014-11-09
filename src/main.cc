@@ -1,16 +1,19 @@
+#include <array>
 #include <aubio/aubio.h>
+#include <cstdint>
+#include <cmath>
 #include <dirent.h>
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
-#include <cstdint>
-#include <array>
+
 
 #include "xtract/libxtract.h"
 #include "xtract/xtract_scalar.h"
@@ -231,6 +234,16 @@ void	ExtractSpectrumCentroids(std::vector<double> &wav_data, double *window, std
     std::cout << "centroid : " << centroid << std::endl;
 }
 
+std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
+	std::vector<double> energies;
+
+	for (auto const &sample : wav_file) {
+		double energy = pow(sample, 2);
+		energies.push_back(energy);
+	}
+	return energies;
+}
+
 void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	double *window = NULL;
 
@@ -250,9 +263,21 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	std::cout << "[WAVE] Samples : " << samples << std::endl;
 	std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
 
+	std::vector<double> energy_vector = FindEnergyInSamples(wav_data);
+	double sum = std::accumulate(energy_vector.begin(), energy_vector.end(), 0.0);
+	double mean =  sum / energy_vector.size();
+
+	double accum = 0.0;
+	std::for_each (energy_vector.begin(), energy_vector.end(), [&](const double d) {
+    	accum += (d - mean) * (d - mean);
+	});
+	double stdev = sqrt(accum / (energy_vector.size()-1));
+
+
 	window = xtract_init_window(kBlockSize, XTRACT_HANN);
 	for (uint64_t i = 0; (i + kBlockSize) < samples; i += (kBlockSize >> 1)) {
 		ExtractSpectrumCentroids(wav_data, window, sample_rate, i);
+		//energy_per_frame.push_bash(ExtractEnergy());
 	}
 }
 

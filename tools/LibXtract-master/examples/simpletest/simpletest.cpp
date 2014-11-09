@@ -128,7 +128,7 @@ int main(void)
     int n;
     int rv = XTRACT_SUCCESS;
     double last_found_peak_time = 0.0;
-    WaveFile wavFile("clas_10.wav");
+    WaveFile wavFile("clas_01.wav");
     xtract_mel_filter mel_filters;
     xtract_last_n_state *last_n_state = xtract_last_n_state_new(MAVG_COUNT);
 
@@ -169,7 +169,7 @@ int main(void)
     /* 
     print_wavetable();
     */
-    std::cout << "File has " << wavSamples << " samples" << std::endl;
+    //std::cout << "File has " << wavSamples << " samples" << std::endl;
     int peak_found = XTRACT_NO_RESULT;
 
     for (uint64_t n = 0; (n + BLOCKSIZE) < wavSamples; n += HALF_BLOCKSIZE) // Overlap by HALF_BLOCKSIZE
@@ -184,7 +184,7 @@ int main(void)
             int note = (int)round(midicents / 100);
             if (note != prev_note)
             {
-                printf("Pitch: %d at %f\n", note, n / (float)SAMPLERATE);
+                //printf("Pitch: %d at %f\n", note, n / (float)SAMPLERATE);
             }
             prev_note = note;
         }
@@ -277,7 +277,7 @@ int main(void)
             double peak_time = n / (float)SAMPLERATE;
             if (peak_time - last_found_peak_time > .05 || peak_time < .05)
             {
-                printf("Onset at %f seconds\n", n / (float)SAMPLERATE);
+                //printf("Onset at %f seconds\n", n / (float)SAMPLERATE);
                 last_found_peak_time = peak_time;
             }
         }

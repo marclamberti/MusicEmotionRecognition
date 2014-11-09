@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <aubio/aubio.h>
 #include <dirent.h>
 #include <fstream>
@@ -20,9 +21,9 @@
 
 namespace {
 
-	const int kBlockSize = 512;
-	const int kNumberOfJazzSong = 85;
-	const int kNumberOfClassicalSong = 65;
+	const unsigned 	int kBlockSize = 512;
+	const unsigned int kNumberOfJazzSong = 85;
+	const unsigned int kNumberOfClassicalSong = 65;
 
 	enum Format {
 		MIDI,
@@ -210,6 +211,12 @@ void	MidiFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	tuple[MODE] = static_cast<float>(ExtractMode(info_in_midi));
 	tuple[KEY] = static_cast<float>(ExtractKey(info_in_midi));
 	tuple[GENDER] = static_cast<float>(ExtractGender(song_id));
+}
+
+void	ExtractFundamentalFrequencies(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {
+	std::vector<double>	fundamental_frequencies;
+	double f0 = 0.;
+
 }
 
 void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {

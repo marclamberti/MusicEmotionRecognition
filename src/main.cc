@@ -2,6 +2,7 @@
 #include <aubio/aubio.h>
 #include <cstdint>
 #include <cmath>
+#include <ctgmath>
 #include <dirent.h>
 #include <fstream>
 #include <iostream>
@@ -13,7 +14,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
-
 
 #include "xtract/libxtract.h"
 #include "xtract/xtract_scalar.h"
@@ -214,24 +214,45 @@ void	MidiFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	tuple[GENDER] = static_cast<float>(ExtractGender(song_id));
 }
 
-void	ExtractSpectrumCentroids(std::vector<double> &wav_data, double *window, std::uint64_t sample_rate, uint64_t i) {
+void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {
 	std::array<double, 4> argv;
 	std::array<double, kBlockSize> windowed;
 	std::array<double, kBlockSize> spectrum;
-	double centroid = 0.0;
+	std::vector<double>	centroids;
+	double	mean = 0.;
+	double	variance = 0.;
+	double	standard_deviation = 0.;
+	double 	centroid = 0.;
+	double 	*window = NULL;
 
     argv[0] = sample_rate / (float)kBlockSize;
     argv[1] = XTRACT_MAGNITUDE_SPECTRUM; // Determine the spectrum type
     argv[2] = 0.f; // Whether or not the DC component is included in the output
     argv[3] = 0.f; // Whether the magnitude/power coefficients are to be normalised
 
-    xtract_windowed(&wav_data[i], kBlockSize, window, windowed.data());
-   	xtract_init_fft(kBlockSize, XTRACT_SPECTRUM);
-   	xtract[XTRACT_SPECTRUM](windowed.data(), kBlockSize, &argv[0], spectrum.data());
-  	xtract_free_fft();
+	window = xtract_init_window(kBlockSize, XTRACT_HANN);
+	for (uint64_t i = 0; (i + kBlockSize) < wav_data.size(); i += (kBlockSize >> 1)) {
+	    xtract_windowed(&wav_data.data()[i], kBlockSize, window, windowed.data());
+	   	xtract_init_fft(kBlockSize, XTRACT_SPECTRUM);
+	   	xtract[XTRACT_SPECTRUM](windowed.data(), kBlockSize, &argv[0], spectrum.data());
+	  	xtract_free_fft();
 
-	xtract[XTRACT_SPECTRAL_CENTROID](spectrum.data(), kBlockSize, NULL, &centroid);
-    std::cout << "centroid : " << centroid << std::endl;
+		xtract[XTRACT_SPECTRAL_CENTROID](spectrum.data(), kBlockSize, NULL, &centroid);
+		if (!std::isnan(centroid)) {
+			centroids.push_back(centroid);
+		}
+	}
+	if (xtract_mean(centroids.data(), centroids.size(), NULL, &mean) != XTRACT_SUCCESS) {
+		std::cerr << "Mean for centroids has failed" << std::endl;
+	}
+	if (xtract_variance(centroids.data(), centroids.size(), &mean, &variance) != XTRACT_SUCCESS) {
+		std::cerr << "Variance for centroids has failed" << std::endl;
+	}
+	if (xtract_standard_deviation(centroids.data(), centroids.size(), &variance, &standard_deviation) != XTRACT_SUCCESS) {
+		std::cerr << "Standard deviation for centroids has failed" << std::endl;
+	}
+	tuple[AVERAGE_CENTROID] = static_cast<float>(mean);
+	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(standard_deviation);
 }
 
 std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
@@ -244,9 +265,22 @@ std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
 	return energies;
 }
 
-void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
-	double *window = NULL;
+void	ExtractEnergy(std::vector<float> &tuple, std::vector<double> &wav_data) {
+	std::vector<double> energy_vector = FindEnergyInSamples(wav_data);
+	double sum = std::accumulate(energy_vector.begin(), energy_vector.end(), 0.0);
+	double mean = sum / energy_vector.size();
 
+	double accum = 0.0;
+	std::for_each (energy_vector.begin(), energy_vector.end(), [&](const double d) {
+    	accum += (d - mean) * (d - mean);
+	});
+	double stdev = sqrt(accum / (energy_vector.size()-1));
+
+	tuple[AVERAGE_ENERGY] = static_cast<float>(mean);
+	tuple[ENERGY_STANDARD_DEVIATION] = static_cast<float>(stdev);
+}
+
+void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	WaveFile wav_file(song_wav_path);
 	if (!wav_file.IsLoaded()) {
 		return;
@@ -263,22 +297,8 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	std::cout << "[WAVE] Samples : " << samples << std::endl;
 	std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
 
-	std::vector<double> energy_vector = FindEnergyInSamples(wav_data);
-	double sum = std::accumulate(energy_vector.begin(), energy_vector.end(), 0.0);
-	double mean =  sum / energy_vector.size();
-
-	double accum = 0.0;
-	std::for_each (energy_vector.begin(), energy_vector.end(), [&](const double d) {
-    	accum += (d - mean) * (d - mean);
-	});
-	double stdev = sqrt(accum / (energy_vector.size()-1));
-
-
-	window = xtract_init_window(kBlockSize, XTRACT_HANN);
-	for (uint64_t i = 0; (i + kBlockSize) < samples; i += (kBlockSize >> 1)) {
-		ExtractSpectrumCentroids(wav_data, window, sample_rate, i);
-		//energy_per_frame.push_bash(ExtractEnergy());
-	}
+	ExtractEnergy(tuple, wav_data);
+	ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
 }
 
 void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path, std::string const &song_wav_path) {
@@ -290,6 +310,8 @@ void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	std::cout << "The mode is : " << tuple[MODE] << std::endl;
 	std::cout << "The key is : " << tuple[KEY] << std::endl;
 	std::cout << "The gender is : " << tuple[GENDER] << std::endl;
+	std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
+	std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
 }
 
 std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {
@@ -337,7 +359,7 @@ int main(int ac, char **av){
 	for (auto &tuple : data_set) {
 		std::string song_midi_path = av[1] + std::string("/") + IdToSongName(song_id, Format::MIDI);
 		std::string song_wav_path = av[1] + std::string("/") + IdToSongName(song_id, Format::WAV);
-		if (song_id < 9)
+		if (song_id < 2)
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
 	}
 	//FormatDatasetAndWriteInFile(data_set, "test.txt", LabelTypes::AROUSAL);

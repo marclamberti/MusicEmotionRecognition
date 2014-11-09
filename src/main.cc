@@ -238,7 +238,6 @@ void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wa
 		xtract[XTRACT_SPECTRAL_CENTROID](spectrum.data(), kBlockSize, NULL, &centroid);
 		if (!std::isnan(centroid)) {
 			centroids.push_back(centroid);
-			std::cout << centroid << std::endl;
 		}
 	}
 	if (xtract_mean(centroids.data(), centroids.size(), NULL, &mean) != XTRACT_SUCCESS) {

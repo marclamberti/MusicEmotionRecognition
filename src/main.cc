@@ -1,18 +1,21 @@
 #include <algorithm>
+#include <array>
 #include <aubio/aubio.h>
+#include <cstdint>
+#include <cmath>
+#include <ctgmath>
 #include <dirent.h>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
-#include <cstdint>
-#include <array>
-#include <ctgmath>
 
 #include "xtract/libxtract.h"
 #include "xtract/xtract_scalar.h"
@@ -21,7 +24,7 @@
 
 namespace {
 
-	const unsigned 	int kBlockSize = 512;
+	const unsigned int kBlockSize = 512;
 	const unsigned int kNumberOfJazzSong = 85;
 	const unsigned int kNumberOfClassicalSong = 65;
 
@@ -84,13 +87,13 @@ namespace {
 
 	enum Features {
 		BPM, // OK
-		AVERAGE_ENERGY,
-		ENERGY_STANDARD_DEVIATION,
+		AVERAGE_ENERGY, // OK
+		ENERGY_STANDARD_DEVIATION, // OK
 		AVERAGE_FUNDAMENTAL_FREQUENCY,
 		FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION,
 		NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY,
-		AVERAGE_CENTROID,
-		CENTROID_STANDARD_DEVIATION,
+		AVERAGE_CENTROID, // MIDOK
+		CENTROID_STANDARD_DEVIATION, // MIDOK
 		MODE, // OK
 		KEY, // OK
 		GENDER, // OK
@@ -260,6 +263,40 @@ void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wa
 	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(standard_deviation);
 }
 
+std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
+	std::vector<double> energies;
+
+	for (auto const &sample : wav_file) {
+		double energy = pow(sample, 2);
+		energies.push_back(energy);
+	}
+	return energies;
+}
+
+void	ExtractEnergy(std::vector<float> &tuple, std::vector<double> &wav_data) {
+	std::vector<double> energy_vector = FindEnergyInSamples(wav_data);
+	std::vector<double> means;
+
+	auto energy_iterator = energy_vector.begin();
+	for (uint64_t i = 0; i < wav_data.size(); i += kBlockSize) {
+		unsigned int diff = wav_data.size() - i;
+		int number_of_elements_available = std::min(diff, kBlockSize);
+		double sum = std::accumulate(energy_iterator, energy_iterator + number_of_elements_available, 0.0);
+		energy_iterator += kBlockSize;
+		means.push_back(sum / number_of_elements_available);
+	}
+
+	double mean_of_means = std::accumulate(means.begin(), means.end(), 0.0) / means.size();
+	double accum = 0.0;
+
+	for (auto const &mean : means) {
+		accum += (mean - mean_of_means) * (mean - mean_of_means);
+	}
+	double stdev = sqrt(accum / energy_vector.size());
+	tuple[AVERAGE_ENERGY] = mean_of_means;
+	tuple[ENERGY_STANDARD_DEVIATION] = static_cast<float>(stdev);
+}
+
 void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	WaveFile wav_file(song_wav_path);
 	if (!wav_file.IsLoaded()) {
@@ -276,6 +313,8 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	std::cout << "[WAVE] Bytes : " << bytes << std::endl;
 	std::cout << "[WAVE] Samples : " << samples << std::endl;
 	std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
+
+	ExtractEnergy(tuple, wav_data);
 	ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
 }
 
@@ -290,6 +329,8 @@ void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	std::cout << "The gender is : " << tuple[GENDER] << std::endl;
 	std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
 	std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
+	std::cout << "The average energy is : " << tuple[AVERAGE_ENERGY] << std::endl;
+	std::cout << "The standard deviation of energy is : " << tuple[ENERGY_STANDARD_DEVIATION] << std::endl;
 }
 
 std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {

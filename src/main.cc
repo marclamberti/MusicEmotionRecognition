@@ -24,7 +24,7 @@
 
 namespace {
 
-	const unsigned int kBlockSize = 512;
+	const unsigned int kBlockSize = 1024;
 	const unsigned int kNumberOfJazzSong = 85;
 	const unsigned int kNumberOfClassicalSong = 65;
 
@@ -250,6 +250,10 @@ void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wa
 			centroids.push_back(centroid);
 		}
 	}
+	for (auto centroid : centroids) {
+		std::cout << centroid << std::endl;
+	}
+
 	if (xtract_mean(centroids.data(), centroids.size(), NULL, &mean) != XTRACT_SUCCESS) {
 		std::cerr << "Mean for centroids has failed" << std::endl;
 	}
@@ -278,14 +282,17 @@ void	ExtractEnergy(std::vector<float> &tuple, std::vector<double> &wav_data) {
 	std::vector<double> means;
 
 	auto energy_iterator = energy_vector.begin();
-	for (uint64_t i = 0; i < wav_data.size(); i += kBlockSize) {
+	for (uint64_t i = 0; i < wav_data.size(); i += kBlockSize / 2) {
 		unsigned int diff = wav_data.size() - i;
 		int number_of_elements_available = std::min(diff, kBlockSize);
 		double sum = std::accumulate(energy_iterator, energy_iterator + number_of_elements_available, 0.0);
-		energy_iterator += kBlockSize;
+		energy_iterator += kBlockSize / 2;
 		means.push_back(sum / number_of_elements_available);
 	}
 
+	for (auto mean : means) {
+		std::cout << "m : " << mean << std::endl;
+	}
 	double mean_of_means = std::accumulate(means.begin(), means.end(), 0.0) / means.size();
 	double accum = 0.0;
 
@@ -378,8 +385,10 @@ int main(int ac, char **av){
 	for (auto &tuple : data_set) {
 		std::string song_midi_path = av[1] + std::string("/") + IdToSongName(song_id, Format::MIDI);
 		std::string song_wav_path = av[1] + std::string("/") + IdToSongName(song_id, Format::WAV);
-		if (song_id < 2)
+		if (song_id < 2) {
+			//FillFeatures(tuple, song_id++, song_midi_path, "test.wav");//song_wav_path);
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
+		}
 	}
 	//FormatDatasetAndWriteInFile(data_set, "test.txt", LabelTypes::AROUSAL);
     return 0;

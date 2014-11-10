@@ -21,6 +21,7 @@
 #include "xtract/xtract_scalar.h"
 #include "xtract/xtract_helper.h"
 #include "WaveFile.h"
+#include "chuck_fft.h"
 
 namespace {
 
@@ -222,6 +223,40 @@ void	ExtractFundamentalFrequencies(std::vector<float> &tuple, std::vector<double
 
 }
 
+void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {	
+	float *window = new float[1024];
+    hanning(window, 1024);
+    std::vector<float> fft_buffer;
+    std::vector<float> magitudes;
+    for (double value : wav_data) {
+    	fft_buffer.push_back(value);
+    }
+    apply_window(fft_buffer.data(), window, 1024);
+    rfft(fft_buffer.data(), 1024 / 2, FFT_FORWARD);
+    for (float value : fft_buffer) {
+    	magitudes.push_back(std::abs(value));
+    }
+    /*
+    int n = (1204 >> 1);
+    const double *freqs, *amps;
+    double FA = 0.0, A = 0.0;
+
+    amps = data;
+    freqs = data + n;
+
+    while(n--)
+    {
+        FA += freqs[n] * amps[n];
+        A += amps[n];
+    }
+
+    if(A == 0.0)
+        *result = 0.0;
+    else
+        *result = FA / A;*/
+}
+
+/*
 void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {
 	std::array<double, 4> argv;
 	std::array<double, kBlockSize> windowed;
@@ -233,14 +268,14 @@ void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wa
 	double 	centroid = 0.;
 	double 	*window = NULL;
 
-    argv[0] = sample_rate / (float)kBlockSize;
+    argv[0] = sample_rate / (double)kBlockSize;
     argv[1] = XTRACT_MAGNITUDE_SPECTRUM; // Determine the spectrum type
     argv[2] = 0.f; // Whether or not the DC component is included in the output
     argv[3] = 0.f; // Whether the magnitude/power coefficients are to be normalised
 
 	window = xtract_init_window(kBlockSize, XTRACT_HANN);
 	for (uint64_t i = 0; (i + kBlockSize) < wav_data.size(); i += (kBlockSize >> 1)) {
-	    xtract_windowed(&wav_data.data()[i], kBlockSize, window, windowed.data());
+	    xtract_windowed(wav_data.data(), kBlockSize, window, windowed.data());
 	   	xtract_init_fft(kBlockSize, XTRACT_SPECTRUM);
 	   	xtract[XTRACT_SPECTRUM](windowed.data(), kBlockSize, &argv[0], spectrum.data());
 	  	xtract_free_fft();
@@ -262,7 +297,7 @@ void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wa
 	tuple[AVERAGE_CENTROID] = static_cast<float>(mean);
 	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(standard_deviation);
 }
-
+*/
 std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
 	std::vector<double> energies;
 
@@ -308,8 +343,9 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	std::uint64_t samples = bytes / sizeof(float);
 	std::vector<double> wav_data(samples);
 	std::uint64_t sample_rate = wav_file.GetSampleRate();
-	std::copy(data, data + samples, wav_data.begin());
-
+    for (std::uint64_t i = 0; i < samples; ++i) {
+        wav_data[i] = (double)data[i];
+    }
 	std::cout << "[WAVE] Bytes : " << bytes << std::endl;
 	std::cout << "[WAVE] Samples : " << samples << std::endl;
 	std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;

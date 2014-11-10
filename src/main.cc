@@ -16,18 +16,30 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
+#include <complex>
+#include <valarray>
 
 #include "xtract/libxtract.h"
 #include "xtract/xtract_scalar.h"
 #include "xtract/xtract_helper.h"
 #include "WaveFile.h"
-#include "chuck_fft.h"
+
+#include "../tools/LibXtract-master/src/fft.h"
+
+#include "../tools/LibXtract-master/xtract/libxtract.h"
+#include "../tools/LibXtract-master/src/xtract_macros_private.h"
+#include "../tools/LibXtract-master/src/xtract_globals_private.h"
 
 namespace {
 
-	const unsigned int kBlockSize = 512;
+	const unsigned int kBlockSize = 1024;
 	const unsigned int kNumberOfJazzSong = 85;
 	const unsigned int kNumberOfClassicalSong = 65;
+
+	using Complex = std::complex<double>;
+	using CArray = std::valarray<Complex>;
+ 
+	const double PI = 3.141592653589793238460;
 
 	enum Format {
 		MIDI,
@@ -223,81 +235,95 @@ void	ExtractFundamentalFrequencies(std::vector<float> &tuple, std::vector<double
 
 }
 
-void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {	
-	float *window = new float[1024];
-    hanning(window, 1024);
-    std::vector<float> fft_buffer;
-    std::vector<float> magitudes;
-    for (double value : wav_data) {
-    	fft_buffer.push_back(value);
-    }
-    apply_window(fft_buffer.data(), window, 1024);
-    rfft(fft_buffer.data(), 1024 / 2, FFT_FORWARD);
-    for (float value : fft_buffer) {
-    	magitudes.push_back(std::abs(value));
-    }
-    /*
-    int n = (1204 >> 1);
-    const double *freqs, *amps;
-    double FA = 0.0, A = 0.0;
-
-    amps = data;
-    freqs = data + n;
-
-    while(n--)
+// Cooley–Tukey FFT (in-place)
+void fft(CArray& x)
+{
+    const size_t N = x.size();
+    if (N <= 1) return;
+ 
+    // divide
+    CArray even = x[std::slice(0, N/2, 2)];
+    CArray  odd = x[std::slice(1, N/2, 2)];
+ 
+    // conquer
+    fft(even);
+    fft(odd);
+ 
+    // combine
+    for (size_t k = 0; k < N/2; ++k)
     {
-        FA += freqs[n] * amps[n];
-        A += amps[n];
+        Complex t = std::polar(1.0, -2 * PI * k / N) * odd[k];
+        x[k    ] = even[k] + t;
+        x[k+N/2] = even[k] - t;
     }
-
-    if(A == 0.0)
-        *result = 0.0;
-    else
-        *result = FA / A;*/
 }
 
-/*
+// Hamming window
+std::vector<double> hamming(const std::vector<double> &data, int start, int len)
+{
+    std::vector<double>	window;
+    for (int i = 0; i < len; ++i) {
+    	double h = 0.54 - 0.46 * cos(2.0 * PI * i / (len - 1));
+    	double result = h * data[start + i];
+    	window.push_back(result);
+    }
+    return window;
+}
+
+// Spectrum centroid (Too slow)
+// real	0m12.776s
+// user	0m12.640s
+// sys	0m0.106s
 void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {
-	std::array<double, 4> argv;
-	std::array<double, kBlockSize> windowed;
-	std::array<double, kBlockSize> spectrum;
+	std::vector<double> windowed;
 	std::vector<double>	centroids;
-	double	mean = 0.;
-	double	variance = 0.;
-	double	standard_deviation = 0.;
-	double 	centroid = 0.;
-	double 	*window = NULL;
+	double sum_centroids = 0;
 
-    argv[0] = sample_rate / (double)kBlockSize;
-    argv[1] = XTRACT_MAGNITUDE_SPECTRUM; // Determine the spectrum type
-    argv[2] = 0.f; // Whether or not the DC component is included in the output
-    argv[3] = 0.f; // Whether the magnitude/power coefficients are to be normalised
+	std::cout << "Number of frames: " << wav_data.size() / kBlockSize << std::endl;
+	for (int i = 0; (i + kBlockSize) < wav_data.size(); i += kBlockSize >> 1) {
+	   	windowed = hamming(wav_data, i, kBlockSize);
+	   	CArray x(windowed.size());
+	   	for (int i = 0; i < windowed.size(); ++i) {
+	   		x[i] = windowed[i];
+	   	}
+	   	fft(x);
 
-	window = xtract_init_window(kBlockSize, XTRACT_HANN);
-	for (uint64_t i = 0; (i + kBlockSize) < wav_data.size(); i += (kBlockSize >> 1)) {
-	    xtract_windowed(wav_data.data(), kBlockSize, window, windowed.data());
-	   	xtract_init_fft(kBlockSize, XTRACT_SPECTRUM);
-	   	xtract[XTRACT_SPECTRUM](windowed.data(), kBlockSize, &argv[0], spectrum.data());
-	  	xtract_free_fft();
+	   	// Size between each bin
+	   	//double bin_size = sample_rate / (double)kBlockSize;
+	   	double centroid = 0.;
+	   	double sum_frequency_and_magnitudes = 0.;
+	   	double sum_magnitudes = 0.;
+	   	// Get the frequency and the magnitude of each bin to compute the spectral centroid
+	   	for (int bin = 0; bin < windowed.size() / 2; ++bin) {
+	   		double frequency = (double)bin * (double)sample_rate / (double)windowed.size();
+	   		double real = std::real(x[bin]);
+	   		double imag = std::imag(x[bin]);
+	   		double magnitude = std::sqrt(std::pow(real, 2) + std::pow(imag, 2));
+	   		sum_frequency_and_magnitudes += frequency * magnitude;
+	   		sum_magnitudes += magnitude;
+	   		//std::cout << "bin: " << bin << " real: " << real << " imag: " << imag << " magnitude: " << magnitude << " phase (the angle between the two): " << phase << std::endl;
+	   		//std::cout << "frequency: " << frequency << std::endl;
+	   	}
+	   	centroid = sum_frequency_and_magnitudes / sum_magnitudes;
+	   	centroids.push_back(centroid);
+	   	sum_centroids += centroid;
+	   	//std::cout << "centroid : " << centroid << std::endl;
+   }
 
-		xtract[XTRACT_SPECTRAL_CENTROID](spectrum.data(), kBlockSize, NULL, &centroid);
-		if (!std::isnan(centroid)) {
-			centroids.push_back(centroid);
-		}
-	}
-	if (xtract_mean(centroids.data(), centroids.size(), NULL, &mean) != XTRACT_SUCCESS) {
-		std::cerr << "Mean for centroids has failed" << std::endl;
-	}
-	if (xtract_variance(centroids.data(), centroids.size(), &mean, &variance) != XTRACT_SUCCESS) {
-		std::cerr << "Variance for centroids has failed" << std::endl;
-	}
-	if (xtract_standard_deviation(centroids.data(), centroids.size(), &variance, &standard_deviation) != XTRACT_SUCCESS) {
-		std::cerr << "Standard deviation for centroids has failed" << std::endl;
-	}
-	tuple[AVERAGE_CENTROID] = static_cast<float>(mean);
-	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(standard_deviation);
+ 	// Compute the mean
+ 	double mean = sum_centroids / centroids.size();
+ 	tuple[AVERAGE_CENTROID] = static_cast<float>(mean);
+
+ 	// Compute standard deviation
+ 	double sum = 0.;
+ 	double std_deviation = 0.;
+ 	for (double centroid : centroids) {
+ 		sum += std::pow(centroid - mean, 2);
+ 	}
+ 	std_deviation = std::sqrt(sum / centroids.size());
+ 	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(std_deviation);
 }
-*/
+
 std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
 	std::vector<double> energies;
 
@@ -346,27 +372,27 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
     for (std::uint64_t i = 0; i < samples; ++i) {
         wav_data[i] = (double)data[i];
     }
-	std::cout << "[WAVE] Bytes : " << bytes << std::endl;
-	std::cout << "[WAVE] Samples : " << samples << std::endl;
-	std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
+	//std::cout << "[WAVE] Bytes : " << bytes << std::endl;
+	//std::cout << "[WAVE] Samples : " << samples << std::endl;
+	//std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
 
 	ExtractEnergy(tuple, wav_data);
 	ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
 }
 
 void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path, std::string const &song_wav_path) {
-	std::cout << "Name is : " << song_midi_path << std::endl;
+	//std::cout << "Name is : " << song_midi_path << std::endl;
 	tuple.reserve(NUMBER_OF_FEATURES);
 	//MidiFeatures(tuple, song_id, song_midi_path);
 	WavFeatures(tuple, song_wav_path);
-	std::cout << "The beat is : " << tuple[BPM] << std::endl;
-	std::cout << "The mode is : " << tuple[MODE] << std::endl;
-	std::cout << "The key is : " << tuple[KEY] << std::endl;
-	std::cout << "The gender is : " << tuple[GENDER] << std::endl;
-	std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
-	std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
-	std::cout << "The average energy is : " << tuple[AVERAGE_ENERGY] << std::endl;
-	std::cout << "The standard deviation of energy is : " << tuple[ENERGY_STANDARD_DEVIATION] << std::endl;
+	//std::cout << "The beat is : " << tuple[BPM] << std::endl;
+	//std::cout << "The mode is : " << tuple[MODE] << std::endl;
+	//std::cout << "The key is : " << tuple[KEY] << std::endl;
+	//std::cout << "The gender is : " << tuple[GENDER] << std::endl;
+	//std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
+	//std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
+	//std::cout << "The average energy is : " << tuple[AVERAGE_ENERGY] << std::endl;
+	//std::cout << "The standard deviation of energy is : " << tuple[ENERGY_STANDARD_DEVIATION] << std::endl;
 }
 
 std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {

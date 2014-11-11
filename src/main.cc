@@ -302,39 +302,39 @@ void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wa
 	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(standard_deviation);
 }
 */
-std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
-	std::vector<double> energies;
+std::vector<float> FindEnergyInSamples(std::vector<float> &wav_file) {
+	std::vector<float> energies;
 
 	for (auto const &sample : wav_file) {
-		double energy = pow(sample, 2);
+		float energy = pow(sample, 2);
 		energies.push_back(energy);
 	}
 	return energies;
 }
 
-void	ExtractEnergy(std::vector<float> &tuple, std::vector<double> &wav_data) {
-	std::vector<double> energy_vector = FindEnergyInSamples(wav_data);
-	std::vector<double> means;
+void	ExtractEnergy(std::vector<float> &tuple, std::vector<float> &wav_data) {
+	std::vector<float> energy_vector = FindEnergyInSamples(wav_data);
+	std::vector<float> means;
 
 	auto energy_iterator = energy_vector.begin();
 	for (uint64_t i = 0; i < wav_data.size(); i += kBlockSize / 2) {
 		unsigned int diff = wav_data.size() - i;
 		int number_of_elements_available = std::min(diff, kBlockSize);
-		double sum = std::accumulate(energy_iterator, energy_iterator + number_of_elements_available, 0.0);
+		float sum = std::accumulate(energy_iterator, energy_iterator + number_of_elements_available, 0.0);
 		energy_iterator += kBlockSize / 2;
-		means.push_back(sum / number_of_elements_available);
+		means.push_back(sqrt(sum / number_of_elements_available));
 	}
 
 	for (auto mean : means) {
 		std::cout << "m : " << mean << std::endl;
 	}
-	double mean_of_means = std::accumulate(means.begin(), means.end(), 0.0) / means.size();
-	double accum = 0.0;
+	float mean_of_means = std::accumulate(means.begin(), means.end(), 0.0) / means.size();
+	float accum = 0.0;
 
 	for (auto const &mean : means) {
 		accum += (mean - mean_of_means) * (mean - mean_of_means);
 	}
-	double stdev = sqrt(accum / energy_vector.size());
+	float stdev = sqrt(accum / energy_vector.size());
 	tuple[AVERAGE_ENERGY] = mean_of_means;
 	tuple[ENERGY_STANDARD_DEVIATION] = static_cast<float>(stdev);
 }
@@ -358,7 +358,7 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
 
 	ExtractEnergy(tuple, wav_data);
-	ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
+	//ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
 }
 
 void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path, std::string const &song_wav_path) {

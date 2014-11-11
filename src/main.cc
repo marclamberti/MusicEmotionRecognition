@@ -259,7 +259,7 @@ void fft(CArray& x)
 }
 
 // Hamming window
-std::vector<double> hamming(const std::vector<double> &data, int start, int len)
+std::vector<double> hamming(const std::vector<float> &data, int start, int len)
 {
     std::vector<double>	window;
     for (int i = 0; i < len; ++i) {
@@ -274,53 +274,9 @@ std::vector<double> hamming(const std::vector<double> &data, int start, int len)
 // real	0m12.776s
 // user	0m12.640s
 // sys	0m0.106s
-void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {
+void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<float> &wav_data, std::uint64_t sample_rate) {
 	std::vector<double> windowed;
 	std::vector<double>	centroids;
-<<<<<<< HEAD
-	double	mean = 0.;
-	double	variance = 0.;
-	double	standard_deviation = 0.;
-	double 	centroid = 0.;
-	double 	*window = NULL;
-
-    argv[0] = sample_rate / (double)kBlockSize;
-    argv[1] = XTRACT_MAGNITUDE_SPECTRUM; // Determine the spectrum type
-    argv[2] = 0.f; // Whether or not the DC component is included in the output
-    argv[3] = 0.f; // Whether the magnitude/power coefficients are to be normalised
-
-	window = xtract_init_window(kBlockSize, XTRACT_HANN);
-	for (uint64_t i = 0; (i + kBlockSize) < wav_data.size(); i += (kBlockSize >> 1)) {
-	    xtract_windowed(wav_data.data(), kBlockSize, window, windowed.data());
-	   	xtract_init_fft(kBlockSize, XTRACT_SPECTRUM);
-	   	xtract[XTRACT_SPECTRUM](windowed.data(), kBlockSize, &argv[0], spectrum.data());
-	  	xtract_free_fft();
-
-		xtract[XTRACT_SPECTRAL_CENTROID](spectrum.data(), kBlockSize, NULL, &centroid);
-		if (!std::isnan(centroid)) {
-			centroids.push_back(centroid);
-		}
-	}
-	for (auto centroid : centroids) {
-		std::cout << centroid << std::endl;
-	}
-
-	if (xtract_mean(centroids.data(), centroids.size(), NULL, &mean) != XTRACT_SUCCESS) {
-		std::cerr << "Mean for centroids has failed" << std::endl;
-	}
-	if (xtract_variance(centroids.data(), centroids.size(), &mean, &variance) != XTRACT_SUCCESS) {
-		std::cerr << "Variance for centroids has failed" << std::endl;
-	}
-	if (xtract_standard_deviation(centroids.data(), centroids.size(), &variance, &standard_deviation) != XTRACT_SUCCESS) {
-		std::cerr << "Standard deviation for centroids has failed" << std::endl;
-	}
-	tuple[AVERAGE_CENTROID] = static_cast<float>(mean);
-	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(standard_deviation);
-}
-*/
-std::vector<float> FindEnergyInSamples(std::vector<float> &wav_file) {
-	std::vector<float> energies;
-=======
 	double sum_centroids = 0;
 
 	std::cout << "Number of frames: " << wav_data.size() / kBlockSize << std::endl;
@@ -351,7 +307,7 @@ std::vector<float> FindEnergyInSamples(std::vector<float> &wav_file) {
 	   	centroid = sum_frequency_and_magnitudes / sum_magnitudes;
 	   	centroids.push_back(centroid);
 	   	sum_centroids += centroid;
-	   	//std::cout << "centroid : " << centroid << std::endl;
+	   	std::cout << "centroid : " << centroid << std::endl;
    }
 
  	// Compute the mean
@@ -368,10 +324,8 @@ std::vector<float> FindEnergyInSamples(std::vector<float> &wav_file) {
  	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(std_deviation);
 }
 
-std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
-	std::vector<double> energies;
->>>>>>> cfd487f4a4185b5c703d5e778069fcbc63c543d6
-
+std::vector<float> FindEnergyInSamples(std::vector<float> &wav_file) {
+	std::vector<float> energies;
 	for (auto const &sample : wav_file) {
 		float energy = pow(sample, 2);
 		energies.push_back(energy);
@@ -415,17 +369,17 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	float *data = (float *)wav_file.GetData();
 	std::size_t bytes = wav_file.GetDataSize();
 	std::uint64_t samples = bytes / sizeof(float);
-	std::vector<double> wav_data(samples);
+	std::vector<float> wav_data(samples);
 	std::uint64_t sample_rate = wav_file.GetSampleRate();
     for (std::uint64_t i = 0; i < samples; ++i) {
-        wav_data[i] = (double)data[i];
+        wav_data[i] = (float)data[i];
     }
 	//std::cout << "[WAVE] Bytes : " << bytes << std::endl;
 	//std::cout << "[WAVE] Samples : " << samples << std::endl;
 	//std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
 
-	ExtractEnergy(tuple, wav_data);
-	//ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
+	//ExtractEnergy(tuple, wav_data);
+	ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
 }
 
 void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path, std::string const &song_wav_path) {

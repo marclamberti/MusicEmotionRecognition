@@ -259,7 +259,7 @@ void fft(CArray& x)
 }
 
 // Hamming window
-std::vector<double> hamming(const std::vector<double> &data, int start, int len)
+std::vector<double> hamming(const std::vector<float> &data, int start, int len)
 {
     std::vector<double>	window;
     for (int i = 0; i < len; ++i) {
@@ -274,7 +274,7 @@ std::vector<double> hamming(const std::vector<double> &data, int start, int len)
 // real	0m12.776s
 // user	0m12.640s
 // sys	0m0.106s
-void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {
+void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<float> &wav_data, std::uint64_t sample_rate) {
 	std::vector<double> windowed;
 	std::vector<double>	centroids;
 	double sum_centroids = 0;
@@ -307,7 +307,7 @@ void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wa
 	   	centroid = sum_frequency_and_magnitudes / sum_magnitudes;
 	   	centroids.push_back(centroid);
 	   	sum_centroids += centroid;
-	   	//std::cout << "centroid : " << centroid << std::endl;
+	   	std::cout << "centroid : " << centroid << std::endl;
    }
 
  	// Compute the mean
@@ -324,36 +324,38 @@ void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<double> &wa
  	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(std_deviation);
 }
 
-std::vector<double> FindEnergyInSamples(std::vector<double> &wav_file) {
-	std::vector<double> energies;
-
+std::vector<float> FindEnergyInSamples(std::vector<float> &wav_file) {
+	std::vector<float> energies;
 	for (auto const &sample : wav_file) {
-		double energy = pow(sample, 2);
+		float energy = pow(sample, 2);
 		energies.push_back(energy);
 	}
 	return energies;
 }
 
-void	ExtractEnergy(std::vector<float> &tuple, std::vector<double> &wav_data) {
-	std::vector<double> energy_vector = FindEnergyInSamples(wav_data);
-	std::vector<double> means;
+void	ExtractEnergy(std::vector<float> &tuple, std::vector<float> &wav_data) {
+	std::vector<float> energy_vector = FindEnergyInSamples(wav_data);
+	std::vector<float> means;
 
 	auto energy_iterator = energy_vector.begin();
-	for (uint64_t i = 0; i < wav_data.size(); i += kBlockSize) {
+	for (uint64_t i = 0; i < wav_data.size(); i += kBlockSize / 2) {
 		unsigned int diff = wav_data.size() - i;
 		int number_of_elements_available = std::min(diff, kBlockSize);
-		double sum = std::accumulate(energy_iterator, energy_iterator + number_of_elements_available, 0.0);
-		energy_iterator += kBlockSize;
-		means.push_back(sum / number_of_elements_available);
+		float sum = std::accumulate(energy_iterator, energy_iterator + number_of_elements_available, 0.0);
+		energy_iterator += kBlockSize / 2;
+		means.push_back(sqrt(sum / number_of_elements_available));
 	}
 
-	double mean_of_means = std::accumulate(means.begin(), means.end(), 0.0) / means.size();
-	double accum = 0.0;
+	for (auto mean : means) {
+		std::cout << "m : " << mean << std::endl;
+	}
+	float mean_of_means = std::accumulate(means.begin(), means.end(), 0.0) / means.size();
+	float accum = 0.0;
 
 	for (auto const &mean : means) {
 		accum += (mean - mean_of_means) * (mean - mean_of_means);
 	}
-	double stdev = sqrt(accum / energy_vector.size());
+	float stdev = sqrt(accum / energy_vector.size());
 	tuple[AVERAGE_ENERGY] = mean_of_means;
 	tuple[ENERGY_STANDARD_DEVIATION] = static_cast<float>(stdev);
 }
@@ -367,16 +369,16 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	float *data = (float *)wav_file.GetData();
 	std::size_t bytes = wav_file.GetDataSize();
 	std::uint64_t samples = bytes / sizeof(float);
-	std::vector<double> wav_data(samples);
+	std::vector<float> wav_data(samples);
 	std::uint64_t sample_rate = wav_file.GetSampleRate();
     for (std::uint64_t i = 0; i < samples; ++i) {
-        wav_data[i] = (double)data[i];
+        wav_data[i] = (float)data[i];
     }
 	//std::cout << "[WAVE] Bytes : " << bytes << std::endl;
 	//std::cout << "[WAVE] Samples : " << samples << std::endl;
 	//std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
 
-	ExtractEnergy(tuple, wav_data);
+	//ExtractEnergy(tuple, wav_data);
 	ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
 }
 
@@ -440,8 +442,10 @@ int main(int ac, char **av){
 	for (auto &tuple : data_set) {
 		std::string song_midi_path = av[1] + std::string("/") + IdToSongName(song_id, Format::MIDI);
 		std::string song_wav_path = av[1] + std::string("/") + IdToSongName(song_id, Format::WAV);
-		if (song_id < 2)
+		if (song_id < 2) {
+			//FillFeatures(tuple, song_id++, song_midi_path, "test.wav");//song_wav_path);
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
+		}
 	}
 	//FormatDatasetAndWriteInFile(data_set, "test.txt", LabelTypes::AROUSAL);
     return 0;

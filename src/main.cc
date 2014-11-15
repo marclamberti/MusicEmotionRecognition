@@ -529,7 +529,8 @@ void FormatDatasetAndWriteInFile(std::vector<std::vector<float>> const &data_set
 }
 
 typedef struct s_classification_result {
-	std::vector<Tuple> data_set;
+	std::vector<Tuple> training_set;
+	std::vector<Tuple> test_set;	
 	enum LabelTypes lt;
 	std::vector<int> features_ids;
 	float accuracy;
@@ -608,8 +609,30 @@ std::string FindFeatureFileName(std::vector<int> const &features_ids) {
 	return filename;
 }
 
+std::vector<std::vector<float>> CreateDataSetWithSelectedFeatures(std::vector<std::vector<float>> const &data_set,
+		std::vector<int> features_in_use, enum LabelTypes lt) {
+
+	std::vector<std::vector<float>> new_data_set;
+	for (auto const &tuple : data_set) {
+		Tuple tuple_with_new_features;
+		for (auto const &feature : features_in_use) {
+			tuple_with_new_features.push_back(tuple[feature]);
+		}
+		if (lt == VALENCE)
+			tuple_with_new_features.push_back(tuple[kValenceIndex]);
+		else
+			tuple_with_new_features.push_back(tuple[kArousalIndex]);
+		new_data_set.push_back(tuple_with_new_features);
+	}
+	return new_data_set;
+}
+
+
+// Modify s_classification_result and add test set and training set.
+// Add Test set and training set here.
 std::vector<struct s_classification_result *> GenerateCombinaisons(
-	std::vector<std::vector<float>> const &data_set,
+	std::vector<std::vector<float>> const &training_set,
+	std::vector<std::vector<float>> const &test_set,
 	enum LabelTypes lt, int number_of_features_used) {
 	std::vector<struct s_classification_result *> combinaisons;
 
@@ -622,25 +645,29 @@ std::vector<struct s_classification_result *> GenerateCombinaisons(
 		t_classification_result *result = new t_classification_result;
 		result->lt = lt;
 		result->features_ids = features_in_use;
+		result->training_set = CreateDataSetWithSelectedFeatures(training_set, features_in_use, lt);
+		result->test_set = CreateDataSetWithSelectedFeatures(test_set, features_in_use, lt);
 
-		for (auto const &tuple : data_set) {
-			Tuple tuple_with_new_features;
-			for (auto const &feature : features_in_use) {
-				tuple_with_new_features.push_back(tuple[feature]);
-			}
-			if (lt == VALENCE)
-				tuple_with_new_features.push_back(tuple[kValenceIndex]);
-			else
-				tuple_with_new_features.push_back(tuple[kArousalIndex]);
-			result->data_set.push_back(tuple_with_new_features);
-		}
+		// for (auto const &tuple : data_set) {
+		// 	Tuple tuple_with_new_features;
+		// 	for (auto const &feature : features_in_use) {
+		// 		tuple_with_new_features.push_back(tuple[feature]);
+		// 	}
+		// 	if (lt == VALENCE)
+		// 		tuple_with_new_features.push_back(tuple[kValenceIndex]);
+		// 	else
+		// 		tuple_with_new_features.push_back(tuple[kArousalIndex]);
+		// 	result->data_set.push_back(tuple_with_new_features);
+		// }
 
-		std::string filename = FindFeatureFileName(result->features_ids);
-		FormatDatasetAndWriteInFile(result->data_set, filename, lt);
+		std::string training_filename = FindFeatureFileName(result->features_ids);
+		FormatDatasetAndWriteInFile(result->training_set, training_filename, lt);
+		std::string test_filename = FindFeatureFileName(result->features_ids) + ".test";
+		FormatDatasetAndWriteInFile(result->training_set, test_filename, lt);
 
-		std::string first_cmd = "svm-train  -s 4 -t 2 " + filename;
+		std::string first_cmd = "svm-train  -s 4 -t 2 " + training_filename;
 		ExecCommand(first_cmd);
-		std::string second_cmd = "svm-predict " + filename + ".model";
+		std::string second_cmd = "svm-predict " + training_filename + ".model " + test_filename;
 		std::vector<std::string> output = ExecCommand(second_cmd);
 		// Test and put a value at this split
 		std::string accuracy_in_string = Split(output[2], ' ')[1];
@@ -654,11 +681,13 @@ std::vector<struct s_classification_result *> GenerateCombinaisons(
 }
 
 struct s_classification_result *GenerateAllCombinaisonsAndChooseTheBest(
-	std::vector<std::vector<float>> const &data_set, enum LabelTypes lt) {
+	std::vector<std::vector<float>> const &training_set,
+	std::vector<std::vector<float>> const &test_set, enum LabelTypes lt) {
 	struct s_classification_result *best_result = NULL;
 
 	for (int i = 1; i <= NUMBER_OF_FEATURES; ++i) {
-		std::vector<struct s_classification_result*> results = GenerateCombinaisons(data_set, lt, i);
+		std::vector<struct s_classification_result*> results =
+			GenerateCombinaisons(training_set, test_set, lt, i);
 		for (auto &result : results) {
 			if (!best_result)
 				best_result = result;
@@ -680,17 +709,21 @@ char *labels_to_string[] = {
 };
 
 void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> data_set, enum LabelTypes lt) {
-	struct s_classification_result *best_result = GenerateAllCombinaisonsAndChooseTheBest(data_set, lt);
-	std::string filename = FindFeatureFileName(best_result->features_ids);
-	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[lt]) + ".dataset";
-	ExecCommand(cmd);
-
 	// MARC
 	// Create the training set here.
 	// Give it to FormatDatasetAndWriteInFile();. Don't forget to create a good filename.
-	
+	std::vector<std::vector<float>> training_set;
+
 	// Create the test set here.
 	// Give it to FormatDatasetAndWriteInFile();. Don't forget to create a good filename.
+	std::vector<std::vector<float>> test_set;
+
+
+	struct s_classification_result *best_result =
+		GenerateAllCombinaisonsAndChooseTheBest(training_set, test_set, lt);
+	std::string filename = FindFeatureFileName(best_result->features_ids);
+	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[lt]) + ".dataset";
+	ExecCommand(cmd);
 }
 
 void FillLabels(std::vector<std::vector<float>> data_set) {
@@ -699,8 +732,8 @@ void FillLabels(std::vector<std::vector<float>> data_set) {
 	int i = 0;
 	for (auto &tuple : data_set) {
 		//std::vector<std::string> splited_line = Split(output[i++], ' ');
-		tuple[kArousalIndex] = std::atof(splited_line[i].c_str());
-		tuple[kValenceIndex] = std::atof(splited_line[i + 1].c_str());
+		tuple[kArousalIndex] = std::atof(output[i].c_str());
+		tuple[kValenceIndex] = std::atof(output[i + 1].c_str());
 		i += 2;
 	}
 }
@@ -720,7 +753,8 @@ int main(int ac, char **av) {
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
 		}
 	}
-	//GenerateFinalTrainingAndTestSet(data_set, AROUSAL);
+	FillLabels(data_set);
+	GenerateFinalTrainingAndTestSet(data_set, AROUSAL);
 	//GenerateFinalTrainingAndTestSet(data_set, VALENCE);
     return 0;
 }

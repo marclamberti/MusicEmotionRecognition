@@ -184,7 +184,7 @@ int main(void)
             int note = (int)round(midicents / 100);
             if (note != prev_note)
             {
-                //printf("Pitch: %d at %f\n", note, n / (float)SAMPLERATE);
+                printf("Pitch: %d at %f\n", note, n / (float)SAMPLERATE);
             }
             prev_note = note;
         }

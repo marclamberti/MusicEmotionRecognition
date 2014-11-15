@@ -41,8 +41,6 @@ namespace {
 	using Complex = std::complex<double>;
 	using CArray = std::valarray<Complex>;
  
-	const double PI = 3.141592653589793238460;
-
 	enum Format {
 		MIDI,
 		WAV,
@@ -104,9 +102,9 @@ namespace {
 		BPM, // OK
 		AVERAGE_ENERGY, // OK
 		ENERGY_STANDARD_DEVIATION, // OK
-		AVERAGE_FUNDAMENTAL_FREQUENCY,
-		FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION,
-		NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY,
+		AVERAGE_FUNDAMENTAL_FREQUENCY, // OK
+		FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION, // OK
+		NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY, // OK
 		AVERAGE_CENTROID, // OK
 		CENTROID_STANDARD_DEVIATION, // OK
 		MODE, // OK
@@ -149,8 +147,8 @@ std::vector<std::string> Split(const std::string &s, char delim) {
     return elems;
 }
 
-std::string 	ExecCommand(std::string const &cmd) {
-	std::string output;
+std::vector<std::string> 	ExecCommand(std::string const &cmd) {
+	std::vector<std::string> output;
 	
 	FILE *lsofFile_p = popen(cmd.c_str(), "r");
   	if (lsofFile_p)
@@ -158,10 +156,14 @@ std::string 	ExecCommand(std::string const &cmd) {
   		char buffer[1024];
   		memset(buffer, 0, 1024);
   		// For now we skip the first line.
-  		char *line_p = fgets(buffer, sizeof(buffer), lsofFile_p);
+  	  	char *line_p;
+  		while ((line_p = fgets(buffer, sizeof(buffer), lsofFile_p))) {
+  			output.push_back(line_p);
+  		}
+
   		line_p = fgets(buffer, sizeof(buffer), lsofFile_p);
   		pclose(lsofFile_p);
-  		return line_p;
+  		return output;
   	}
 	return output;
 }
@@ -188,7 +190,7 @@ std::string	IdToSongName(int song_id, enum Format f) {
 
 typedef std::vector<float> Tuple;
 
-std::string GetInfoFromMIDI(std::string const &song_path) {
+std::vector<std::string> GetInfoFromMIDI(std::string const &song_path) {
 	char buff[512];
 	memset(buff, 0, 512);
 	getcwd(buff, 512);
@@ -225,22 +227,16 @@ enum Keys ExtractKey(std::vector<std::string> const &midi_info) {
 }
 
 void	MidiFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path) {
-	std::vector<std::string> info_in_midi = Split(GetInfoFromMIDI(song_midi_path), ';');
+	std::vector<std::string> info_in_midi = Split(GetInfoFromMIDI(song_midi_path)[1], ';');
 	tuple[BPM] = ExtractBpm(info_in_midi);
 	tuple[MODE] = static_cast<float>(ExtractMode(info_in_midi));
 	tuple[KEY] = static_cast<float>(ExtractKey(info_in_midi));
 	tuple[GENDER] = static_cast<float>(ExtractGender(song_id));
 }
 
-void	ExtractFundamentalFrequencies(std::vector<float> &tuple, std::vector<double> &wav_data,
-			std::uint64_t sample_rate) {
-	std::vector<double>	fundamental_frequencies;
-	double f0 = 0.;
-
-}
 
 // Cooley–Tukey FFT (in-place)
-void fft(CArray& x)
+void FFT(CArray& x)
 {
     const size_t N = x.size();
     if (N <= 1) return;
@@ -250,82 +246,173 @@ void fft(CArray& x)
     CArray  odd = x[std::slice(1, N/2, 2)];
  
     // conquer
-    fft(even);
-    fft(odd);
+    FFT(even);
+    FFT(odd);
  
     // combine
     for (size_t k = 0; k < N/2; ++k)
     {
-        Complex t = std::polar(1.0, -2 * PI * k / N) * odd[k];
+        Complex t = std::polar(1.0, -2 * M_PI * k / N) * odd[k];
         x[k    ] = even[k] + t;
         x[k+N/2] = even[k] - t;
     }
 }
 
 // Hamming window
-std::vector<double> hamming(const std::vector<float> &data, int start, int len)
+void Hamming(const std::vector<float> &data, std::vector<float> &window, int start, int len)
 {
-    std::vector<double>	window;
     for (int i = 0; i < len; ++i) {
-    	double h = 0.54 - 0.46 * cos(2.0 * PI * i / (len - 1));
-    	double result = h * data[start + i];
+    	float h = 0.54 - 0.46 * cos(2.0 * M_PI * i / (len - 1));
+    	float result = h * data[start + i];
     	window.push_back(result);
     }
-    return window;
 }
 
-// Spectrum centroid (Too slow)
+/**
+ *  Calculates exact frequency of component in f_bin.
+ *  Assumes FFT has already been applied.
+ */
+float GetFrequenceFromBin(const CArray &fft_data, int f_bin, std::uint64_t sample_rate) {
+	float f_phase;
+    if (std::abs(std::complex<float>(std::real(fft_data[f_bin]), std::imag(fft_data[f_bin]))) < 1)
+        return 0;
+
+    std::complex<float> val = std::complex<float>(std::real(fft_data[f_bin]), std::imag(fft_data[f_bin]));
+    f_phase = arg(val);
+
+    float freq_per_bin = (float)sample_rate / (float)kBlockSize;
+    float cf = f_bin * freq_per_bin;
+    float phase_change = f_phase;
+    float expected = cf * (float)(kBlockSize >> 1) / (float)sample_rate;
+
+    float phase_diff = phase_change / (2.0 * M_PI) - expected;
+    phase_diff -= floor(phase_diff);
+
+    if ((phase_diff -= floor(phase_diff)) > 0.5)
+        phase_diff -= 1;
+
+    phase_diff *= 2 * M_PI;
+
+    double freq_diff = phase_diff * freq_per_bin * ((float)kBlockSize / (float)(kBlockSize >> 1)) / (2 * M_PI);
+    double freq = cf + freq_diff;
+    return freq;
+}
+
+
+/**
+ * If the input signal is a musical note, then its spectrum should consist of a series of peaks, 
+ * corresponding to fundamental frequency with harmonic components at integer multiples of the fundamental frequency. 
+ * Hence when we compress the spectrum a number of times (downsampling), and compare it with the original spectrum, 
+ * we can see that the strongest harmonic peaks line up. The first peak in the original spectrum coincides with the 
+ * second peak in the spectrum compressed by a factor of two, which coincides with the third peak in the spectrum 
+ * compressed by a factor of three. Hence, when the various spectrums are multiplied together, the result will 
+ * form clear peak at the fundamental frequency.
+ */
+float HPS(const CArray &fft_data, std::uint64_t sample_rate) {
+    float max = 0;
+    int f_bin = 0;
+
+    //calculate max HPS - only covering 1/6 of framesize
+    //downsampling by factor of 3 * 1/2 of framesize
+    for (int i = 0; i < kBlockSize / 6; ++i) {
+        int i2 = 2 * i;
+        int i3 = 3 * i;
+        float hps =
+            std::abs(std::complex<float>(std::real(fft_data[i]), std::imag(fft_data[i]))) +
+            0.8 * std::abs(std::complex<float>(std::real(fft_data[i2]), std::imag(fft_data[i2]))) +
+            0.6 * std::abs(std::complex<float>(std::real(fft_data[i3]), std::imag(fft_data[i3])));
+        if (max < hps) {
+            max = hps;
+            f_bin = i;
+        }
+    }
+    return GetFrequenceFromBin(fft_data, f_bin, sample_rate);
+}
+
+void	ExtractSpectrumCentroids(std::vector<float> &tuple, const std::vector<float> &centroids, float sum_centroids) {
+
+ 	// Compute the mean
+ 	float mean = sum_centroids / centroids.size();
+ 	tuple[AVERAGE_CENTROID] = mean;
+
+ 	// Compute the standard deviation
+ 	float sum = 0.;
+ 	float std_deviation = 0.;
+ 	for (float centroid : centroids) {
+ 		sum += std::pow(centroid - mean, 2);
+ 	}
+ 	std_deviation = std::sqrt(sum / centroids.size());
+ 	tuple[CENTROID_STANDARD_DEVIATION] = std_deviation;
+}
+
+void	ExtractFundamentalFrequencies(std::vector<float> &tuple,
+		const std::vector<float> &fundamental_frequencies, float sum_fundamental_frequencies)
+{
+	// Compute the mean
+	float mean = sum_fundamental_frequencies / fundamental_frequencies.size();
+	tuple[AVERAGE_FUNDAMENTAL_FREQUENCY] = mean;
+
+	// Compute the standard deviation and the number of f0 higher than the mean
+	float sum = 0.;
+	float std_deviation = 0.;
+	float num_f0_higher_than_mean = 0.;
+	for (float f0 : fundamental_frequencies) {
+		sum += std::pow(f0 - mean, 2);
+		if (f0 > mean) {
+			++num_f0_higher_than_mean;
+		}
+	}
+	std_deviation = std::sqrt(sum / fundamental_frequencies.size());
+	tuple[FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION] = std_deviation;
+	tuple[NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY] = num_f0_higher_than_mean;
+}
+
+// FFT (Too slow)
 // real	0m12.776s
 // user	0m12.640s
 // sys	0m0.106s
-void	ExtractSpectrumCentroids(std::vector<float> &tuple, std::vector<float> &wav_data, std::uint64_t sample_rate) {
-	std::vector<double> windowed;
-	std::vector<double>	centroids;
-	double sum_centroids = 0;
+void	ExtractFeaturesUsingFFT(std::vector<float> &tuple, std::vector<float> &wav_data, std::uint64_t sample_rate) {
+	std::vector<float> 	windowed;
+	std::vector<float>	fundamental_frequencies;
+	std::vector<float>	centroids;
+	float sum_centroids = 0.;
+	float sum_fundamental_frequencies = 0.;
 
 	std::cout << "Number of frames: " << wav_data.size() / kBlockSize << std::endl;
-	for (int i = 0; (i + kBlockSize) < wav_data.size(); i += kBlockSize >> 1) {
-	   	windowed = hamming(wav_data, i, kBlockSize);
-	   	CArray x(windowed.size());
-	   	for (int i = 0; i < windowed.size(); ++i) {
-	   		x[i] = windowed[i];
-	   	}
-	   	fft(x);
+	for (int start_block = 0; (start_block + kBlockSize) < wav_data.size(); start_block += kBlockSize >> 1) {
+		windowed.clear();
 
-	   	// Size between each bin
-	   	//double bin_size = sample_rate / (double)kBlockSize;
-	   	double centroid = 0.;
-	   	double sum_frequency_and_magnitudes = 0.;
-	   	double sum_magnitudes = 0.;
+	   	Hamming(wav_data, windowed, start_block, kBlockSize);
+	   	CArray fft_data(windowed.size());
+	   	for (int i = 0; i < windowed.size(); ++i) {
+	   		fft_data[i] = windowed[i];
+	   	}
+	   	FFT(fft_data);
+
+	   	float centroid = 0.;
+	   	float sum_frequency_and_magnitudes = 0.;
+	   	float sum_magnitudes = 0.;
 	   	// Get the frequency and the magnitude of each bin to compute the spectral centroid
 	   	for (int bin = 0; bin < windowed.size() / 2; ++bin) {
-	   		double frequency = (double)bin * (double)sample_rate / (double)windowed.size();
-	   		double real = std::real(x[bin]);
-	   		double imag = std::imag(x[bin]);
-	   		double magnitude = std::sqrt(std::pow(real, 2) + std::pow(imag, 2));
+	   		float frequency = (float)bin * (float)sample_rate / (float)windowed.size();
+	   		float real = std::real(fft_data[bin]);
+	   		float imag = std::imag(fft_data[bin]);
+	   		float magnitude = std::sqrt(std::pow(real, 2) + std::pow(imag, 2));
 	   		sum_frequency_and_magnitudes += frequency * magnitude;
 	   		sum_magnitudes += magnitude;
-	   		//std::cout << "bin: " << bin << " real: " << real << " imag: " << imag << " magnitude: " << magnitude << " phase (the angle between the two): " << phase << std::endl;
-	   		//std::cout << "frequency: " << frequency << std::endl;
+	   	}
+	   	// Get the fundamental frequency of the window
+	   	float freq = HPS(fft_data, sample_rate);
+	   	if (freq) {
+	   		fundamental_frequencies.push_back(freq);
+	   		sum_fundamental_frequencies += freq;
 	   	}
 	   	centroid = sum_frequency_and_magnitudes / sum_magnitudes;
 	   	centroids.push_back(centroid);
 	   	sum_centroids += centroid;
-	   	std::cout << "centroid : " << centroid << std::endl;
    }
-
- 	// Compute the mean
- 	double mean = sum_centroids / centroids.size();
- 	tuple[AVERAGE_CENTROID] = static_cast<float>(mean);
-
- 	// Compute standard deviation
- 	double sum = 0.;
- 	double std_deviation = 0.;
- 	for (double centroid : centroids) {
- 		sum += std::pow(centroid - mean, 2);
- 	}
- 	std_deviation = std::sqrt(sum / centroids.size());
- 	tuple[CENTROID_STANDARD_DEVIATION] = static_cast<float>(std_deviation);
+   ExtractSpectrumCentroids(tuple, centroids, sum_centroids);
+   ExtractFundamentalFrequencies(tuple, fundamental_frequencies, sum_fundamental_frequencies);
 }
 
 std::vector<float> FindEnergyInSamples(std::vector<float> &wav_file) {
@@ -350,9 +437,9 @@ void	ExtractEnergy(std::vector<float> &tuple, std::vector<float> &wav_data) {
 		means.push_back(sqrt(sum / number_of_elements_available));
 	}
 
-	for (auto mean : means) {
-		std::cout << "m : " << mean << std::endl;
-	}
+	//for (auto mean : means) {
+	//	std::cout << "m : " << mean << std::endl;
+	//}
 	float mean_of_means = std::accumulate(means.begin(), means.end(), 0.0) / means.size();
 	float accum = 0.0;
 
@@ -383,7 +470,8 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	//std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
 
 	ExtractEnergy(tuple, wav_data);
-	//ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
+	ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
+	ExtractFeaturesUsingFFT(tuple, wav_data, sample_rate);
 }
 
 void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path,
@@ -396,10 +484,13 @@ void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	//std::cout << "The mode is : " << tuple[MODE] << std::endl;
 	//std::cout << "The key is : " << tuple[KEY] << std::endl;
 	//std::cout << "The gender is : " << tuple[GENDER] << std::endl;
-	//std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
-	//std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
-	//std::cout << "The average energy is : " << tuple[AVERAGE_ENERGY] << std::endl;
-	//std::cout << "The standard deviation of energy is : " << tuple[ENERGY_STANDARD_DEVIATION] << std::endl;
+	std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
+	std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
+	std::cout << "The average energy is : " << tuple[AVERAGE_ENERGY] << std::endl;
+	std::cout << "The standard deviation of energy is : " << tuple[ENERGY_STANDARD_DEVIATION] << std::endl;
+	std::cout << "The average f0 is : " << tuple[AVERAGE_FUNDAMENTAL_FREQUENCY] << std::endl;
+	std::cout << "The standard deviation of f0 is : " << tuple[FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION] << std::endl;
+	std::cout << "The number of f0 higher than the average of f0 is : " << tuple[NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY] << std::endl;
 }
 
 std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {
@@ -506,6 +597,16 @@ void UpdateFeaturesInUse(std::vector<int> &features_in_use) {
 	}
 }
 
+std::string FindFeatureFileName(std::vector<int> const &features_ids) {
+	std::string filename = std::string("combinaisons/") + "F" + std::to_string(features_ids.size());
+	for (auto const &feature : features_ids) {
+		filename += "_";
+		filename += std::to_string(feature);//features_to_string[feature];
+	}
+	filename += ".dataset";
+	return filename;
+}
+
 std::vector<struct s_classification_result *> GenerateCombinaisons(
 	std::vector<std::vector<float>> const &data_set,
 	enum LabelTypes lt, int number_of_features_used) {
@@ -514,7 +615,6 @@ std::vector<struct s_classification_result *> GenerateCombinaisons(
 	int const number_of_combinaison = Factorial(NUMBER_OF_FEATURES) /
 		(Factorial(number_of_features_used) * Factorial(NUMBER_OF_FEATURES - number_of_features_used));
 	std::vector<int> features_in_use(number_of_features_used);
-	std::cout << "The number of combinaisons is : " << number_of_combinaison << std::endl;
 	InitializeFeaturesInUse(features_in_use);
 
 	for (int i = 0; i < number_of_combinaison; ++i) {
@@ -525,10 +625,7 @@ std::vector<struct s_classification_result *> GenerateCombinaisons(
 		for (auto const &tuple : data_set) {
 			Tuple tuple_with_new_features;
 			for (auto const &feature : features_in_use) {
-				std::cout << feature << " ---- features_ids " << feature << std::endl;
-
 				tuple_with_new_features.push_back(tuple[feature]);
-				std::cout << feature << " ---- features_ids done " << feature << std::endl;
 			}
 			if (lt == VALENCE)
 				tuple_with_new_features.push_back(tuple[kValenceIndex]);
@@ -536,18 +633,18 @@ std::vector<struct s_classification_result *> GenerateCombinaisons(
 				tuple_with_new_features.push_back(tuple[kArousalIndex]);
 			result->data_set.push_back(tuple_with_new_features);
 		}
-		// Create an array of number_of_features_used
-		// And count like 100 200 300 010 110 210 310 020
-		// Update the next one when the value reaches number of features.
-		// Use the fonction to write the data set to a file
-		// With popen test_it and get the output. fill accuracy.
-		std::string filename = std::string("combinaisons/") + "F" + std::to_string(number_of_features_used);
-		for (auto const &feature : result->features_ids) {
-			filename += "_";
-			filename += std::to_string(feature);//features_to_string[feature];
-		}
-		filename += ".dataset";
+
+		std::string filename = FindFeatureFileName(result->features_ids);
 		FormatDatasetAndWriteInFile(result->data_set, filename, lt);
+
+		std::string first_cmd = "svm-train  -s 4 -t 2 " + filename;
+		ExecCommand(first_cmd);
+		std::string second_cmd = "svm-predict " + filename + ".model";
+		std::vector<std::string> output = ExecCommand(second_cmd);
+		// Test and put a value at this split
+		std::string accuracy_in_string = Split(output[2], ' ')[1];
+		result->accuracy = std::atof(accuracy_in_string.substr(0, accuracy_in_string.size() - 1).c_str());
+
 		combinaisons.push_back(result);
 		if (i + 1 != number_of_combinaison)
 			UpdateFeaturesInUse(features_in_use);
@@ -575,6 +672,37 @@ struct s_classification_result *GenerateAllCombinaisonsAndChooseTheBest(
 	return best_result;
 }
 
+char *labels_to_string[] = {
+	"AROUSAL",
+	"VALENCE",
+	"MULTILABEL"
+};
+
+void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> data_set, enum LabelTypes lt) {
+	struct s_classification_result *arousal_best_result = GenerateAllCombinaisonsAndChooseTheBest(data_set, lt);
+	std::string filename = FindFeatureFileName(arousal_best_result->features_ids);
+	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[lt]) + ".dataset";
+	ExecCommand(cmd);
+
+	// MARC
+	// Create the training set here.
+	// Give it to FormatDatasetAndWriteInFile();. Don't forget to create a good filename.
+	
+	// Create the test set here.
+	// Give it to FormatDatasetAndWriteInFile();. Don't forget to create a good filename.
+}
+
+void FillLabels(std::vector<std::vector<float>> data_set) {
+	std::string cmd = "cat merge_results_script/merge";
+	std::vector<std::string> output = ExecCommand(cmd);
+	int i = 0;
+	for (auto &tuple : data_set) {
+		std::vector<std::string> splited_line = Split(output[i++], ' ');
+		tuple[kArousalIndex] = std::atof(splited_line[0].c_str());
+		tuple[kValenceIndex] = std::atof(splited_line[1].c_str());
+	}
+}
+
 int main(int ac, char **av) {
 	std::vector<std::vector<float>> data_set(1);//kNumberOfClassicalSong + kNumberOfJazzSong); 
 	
@@ -590,7 +718,7 @@ int main(int ac, char **av) {
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
 		}
 	}
-	GenerateAllCombinaisonsAndChooseTheBest(data_set, AROUSAL);
-	//FormatDatasetAndWriteInFile(data_set, "test.txt", LabelTypes::AROUSAL);
+	//GenerateFinalTrainingAndTestSet(data_set, AROUSAL);
+	//GenerateFinalTrainingAndTestSet(data_set, VALENCE);
     return 0;
 }

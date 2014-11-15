@@ -1,0 +1,7 @@
+./sox input.wav output.wav silence 1 0.1 1%
+
+This example roughly translates to: trim silence (anything less than 1% volume) until we encounter sound lasting more than 0.1 seconds in duration. 
+
+./sox input.wav output.wav trim 0 60
+
+Keeps 0-60

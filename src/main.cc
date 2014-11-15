@@ -358,7 +358,8 @@ float HPS(const CArray &fft_data, std::uint64_t sample_rate) {
     return GetFrequenceFromBin(fft_data, f_bin, sample_rate);
 }
 
-void	ExtractSpectrumCentroids(std::vector<float> &tuple, const std::vector<float> &centroids, float sum_centroids) {
+void	ExtractSpectrumCentroids(std::vector<float> &tuple,
+	const std::vector<float> &centroids, float sum_centroids) {
 
  	// Compute the mean
  	float mean = sum_centroids / centroids.size();
@@ -679,8 +680,8 @@ char *labels_to_string[] = {
 };
 
 void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> data_set, enum LabelTypes lt) {
-	struct s_classification_result *arousal_best_result = GenerateAllCombinaisonsAndChooseTheBest(data_set, lt);
-	std::string filename = FindFeatureFileName(arousal_best_result->features_ids);
+	struct s_classification_result *best_result = GenerateAllCombinaisonsAndChooseTheBest(data_set, lt);
+	std::string filename = FindFeatureFileName(best_result->features_ids);
 	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[lt]) + ".dataset";
 	ExecCommand(cmd);
 
@@ -697,9 +698,10 @@ void FillLabels(std::vector<std::vector<float>> data_set) {
 	std::vector<std::string> output = ExecCommand(cmd);
 	int i = 0;
 	for (auto &tuple : data_set) {
-		std::vector<std::string> splited_line = Split(output[i++], ' ');
-		tuple[kArousalIndex] = std::atof(splited_line[0].c_str());
-		tuple[kValenceIndex] = std::atof(splited_line[1].c_str());
+		//std::vector<std::string> splited_line = Split(output[i++], ' ');
+		tuple[kArousalIndex] = std::atof(splited_line[i].c_str());
+		tuple[kValenceIndex] = std::atof(splited_line[i + 1].c_str());
+		i += 2;
 	}
 }
 

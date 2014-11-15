@@ -1,13 +1,15 @@
 #include <algorithm>
 #include <array>
 #include <aubio/aubio.h>
-#include <cstdint>
 #include <cmath>
+#include <complex>
+#include <cstdint>
 #include <ctgmath>
 #include <dirent.h>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <list>
 #include <map>
 #include <numeric>
 #include <sstream>
@@ -15,9 +17,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <vector>
-#include <complex>
 #include <valarray>
+#include <vector>
+
 
 #include "xtract/libxtract.h"
 #include "xtract/xtract_scalar.h"
@@ -105,8 +107,8 @@ namespace {
 		AVERAGE_FUNDAMENTAL_FREQUENCY,
 		FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION,
 		NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY,
-		AVERAGE_CENTROID, // MIDOK
-		CENTROID_STANDARD_DEVIATION, // MIDOK
+		AVERAGE_CENTROID, // OK
+		CENTROID_STANDARD_DEVIATION, // OK
 		MODE, // OK
 		KEY, // OK
 		GENDER, // OK
@@ -161,7 +163,6 @@ std::string 	ExecCommand(std::string const &cmd) {
   		pclose(lsofFile_p);
   		return line_p;
   	}
-
 	return output;
 }
 
@@ -184,6 +185,8 @@ std::string	IdToSongName(int song_id, enum Format f) {
 	}
 	return song_genre + "_" + song_number + kFormatToString[f];
 }
+
+typedef std::vector<float> Tuple;
 
 std::string GetInfoFromMIDI(std::string const &song_path) {
 	char buff[512];
@@ -229,7 +232,8 @@ void	MidiFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	tuple[GENDER] = static_cast<float>(ExtractGender(song_id));
 }
 
-void	ExtractFundamentalFrequencies(std::vector<float> &tuple, std::vector<double> &wav_data, std::uint64_t sample_rate) {
+void	ExtractFundamentalFrequencies(std::vector<float> &tuple, std::vector<double> &wav_data,
+			std::uint64_t sample_rate) {
 	std::vector<double>	fundamental_frequencies;
 	double f0 = 0.;
 
@@ -378,11 +382,12 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 	//std::cout << "[WAVE] Samples : " << samples << std::endl;
 	//std::cout << "[WAVE] Sample Rate : " << sample_rate << std::endl;
 
-	//ExtractEnergy(tuple, wav_data);
-	ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
+	ExtractEnergy(tuple, wav_data);
+	//ExtractSpectrumCentroids(tuple, wav_data, sample_rate);
 }
 
-void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path, std::string const &song_wav_path) {
+void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path,
+					std::string const &song_wav_path) {
 	//std::cout << "Name is : " << song_midi_path << std::endl;
 	tuple.reserve(NUMBER_OF_FEATURES);
 	//MidiFeatures(tuple, song_id, song_midi_path);
@@ -431,8 +436,147 @@ void FormatDatasetAndWriteInFile(std::vector<std::vector<float>> const &data_set
 	output_file_stream.close();
 }
 
-int main(int ac, char **av){
-	std::vector<std::vector<float>> data_set(kNumberOfClassicalSong + kNumberOfJazzSong); 
+typedef struct s_classification_result {
+	std::vector<Tuple> data_set;
+	enum LabelTypes lt;
+	std::vector<int> features_ids;
+	float accuracy;
+} t_classification_result;
+
+int Factorial(int n)
+{
+  return (n == 1 || n == 0) ? 1 : Factorial(n - 1) * n;
+}
+
+enum Features features_array[] = {
+	BPM, // OK
+	AVERAGE_ENERGY, // OK
+	ENERGY_STANDARD_DEVIATION, // OK
+	AVERAGE_FUNDAMENTAL_FREQUENCY,
+	FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION,
+	NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY,
+	AVERAGE_CENTROID, // OK
+	CENTROID_STANDARD_DEVIATION, // OK
+	MODE, // OK
+	KEY, // OK
+	GENDER, // OK
+	NUMBER_OF_FEATURES
+};
+
+std::string features_to_string[] = {
+	"BPM",
+	"AVERAGE_ENERGY",
+	"ENERGY_STANDARD_DEVIATION",
+	"AVERAGE_FUNDAMENTAL_FREQUENCY",
+	"FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION",
+	"NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY",
+	"AVERAGE_CENTROID",
+	"CENTROID_STANDARD_DEVIATION",
+	"MODE",
+	"KEY",
+	"GENDER"
+};
+
+void InitializeFeaturesInUse(std::vector<int> &features_in_use) {
+	int i = features_in_use.size() - 1;
+	for (auto &feature_id : features_in_use) {
+		feature_id = i;
+		--i;
+	}
+}
+
+void UpdateFeaturesInUse(std::vector<int> &features_in_use) {
+	for (int i = 0; i < features_in_use.size(); ++i) {
+		if (i == 0)
+			features_in_use[i] = features_in_use[i] + 1;
+
+			int j;
+			for (j = i; j < features_in_use.size() && 
+				features_in_use[j] == static_cast<int>(NUMBER_OF_FEATURES) - j; ++j) {
+				features_in_use[j + 1] += 1;
+				features_in_use[j] = 0;
+			}
+			if (features_in_use.size() > 1) {
+				for (j = (j == features_in_use.size()) ? j - 2 : j - 1; j >= 0; --j) {
+					while (features_in_use[j] <= features_in_use[j + 1]) {
+						features_in_use[j] += 1;
+					}
+				}
+			}
+	}
+}
+
+std::vector<struct s_classification_result *> GenerateCombinaisons(
+	std::vector<std::vector<float>> const &data_set,
+	enum LabelTypes lt, int number_of_features_used) {
+	std::vector<struct s_classification_result *> combinaisons;
+
+	int const number_of_combinaison = Factorial(NUMBER_OF_FEATURES) /
+		(Factorial(number_of_features_used) * Factorial(NUMBER_OF_FEATURES - number_of_features_used));
+	std::vector<int> features_in_use(number_of_features_used);
+	std::cout << "The number of combinaisons is : " << number_of_combinaison << std::endl;
+	InitializeFeaturesInUse(features_in_use);
+
+	for (int i = 0; i < number_of_combinaison; ++i) {
+		t_classification_result *result = new t_classification_result;
+		result->lt = lt;
+		result->features_ids = features_in_use;
+
+		for (auto const &tuple : data_set) {
+			Tuple tuple_with_new_features;
+			for (auto const &feature : features_in_use) {
+				std::cout << feature << " ---- features_ids " << feature << std::endl;
+
+				tuple_with_new_features.push_back(tuple[feature]);
+				std::cout << feature << " ---- features_ids done " << feature << std::endl;
+			}
+			if (lt == VALENCE)
+				tuple_with_new_features.push_back(tuple[kValenceIndex]);
+			else
+				tuple_with_new_features.push_back(tuple[kArousalIndex]);
+			result->data_set.push_back(tuple_with_new_features);
+		}
+		// Create an array of number_of_features_used
+		// And count like 100 200 300 010 110 210 310 020
+		// Update the next one when the value reaches number of features.
+		// Use the fonction to write the data set to a file
+		// With popen test_it and get the output. fill accuracy.
+		std::string filename = std::string("combinaisons/") + "F" + std::to_string(number_of_features_used);
+		for (auto const &feature : result->features_ids) {
+			filename += "_";
+			filename += std::to_string(feature);//features_to_string[feature];
+		}
+		filename += ".dataset";
+		FormatDatasetAndWriteInFile(result->data_set, filename, lt);
+		combinaisons.push_back(result);
+		if (i + 1 != number_of_combinaison)
+			UpdateFeaturesInUse(features_in_use);
+	}
+	return combinaisons;
+}
+
+struct s_classification_result *GenerateAllCombinaisonsAndChooseTheBest(
+	std::vector<std::vector<float>> const &data_set, enum LabelTypes lt) {
+	struct s_classification_result *best_result = NULL;
+
+	for (int i = 1; i <= NUMBER_OF_FEATURES; ++i) {
+		std::vector<struct s_classification_result*> results = GenerateCombinaisons(data_set, lt, i);
+		for (auto &result : results) {
+			if (!best_result)
+				best_result = result;
+			else if (best_result->accuracy < result->accuracy)
+				best_result = result;
+		}
+		for (auto &result : results) {
+			if (result != best_result)
+				delete result;
+		}
+	}
+	return best_result;
+}
+
+int main(int ac, char **av) {
+	std::vector<std::vector<float>> data_set(1);//kNumberOfClassicalSong + kNumberOfJazzSong); 
 	
 	if (ac < 2) {
 		std::cout << "Usage:" << av[0] << " <training_directory>" << std::endl;
@@ -443,10 +587,10 @@ int main(int ac, char **av){
 		std::string song_midi_path = av[1] + std::string("/") + IdToSongName(song_id, Format::MIDI);
 		std::string song_wav_path = av[1] + std::string("/") + IdToSongName(song_id, Format::WAV);
 		if (song_id < 2) {
-			//FillFeatures(tuple, song_id++, song_midi_path, "test.wav");//song_wav_path);
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
 		}
 	}
+	GenerateAllCombinaisonsAndChooseTheBest(data_set, AROUSAL);
 	//FormatDatasetAndWriteInFile(data_set, "test.txt", LabelTypes::AROUSAL);
     return 0;
 }

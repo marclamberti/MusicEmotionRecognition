@@ -35,7 +35,7 @@
 namespace {
 
 	const unsigned int kBlockSize = 1024;
-	const unsigned int kNumberOfJazzSong = 85;
+	const unsigned int kNumberOfJazzSong = 83; // two removed because they were too short
 	const unsigned int kNumberOfClassicalSong = 65;
 
 	using Complex = std::complex<double>;
@@ -685,12 +685,66 @@ void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> data_set, e
 	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[lt]) + ".dataset";
 	ExecCommand(cmd);
 
-	// MARC
-	// Create the training set here.
-	// Give it to FormatDatasetAndWriteInFile();. Don't forget to create a good filename.
-	
-	// Create the test set here.
-	// Give it to FormatDatasetAndWriteInFile();. Don't forget to create a good filename.
+	int number_of_classical_song = kNumberOfClassicalSong;
+	int number_of_jazz_song = kNumberOfJazzSong;
+	int	rest_jazz = 0;
+	int rest_class = 0;
+	if (number_of_classical_song > number_of_jazz_song) {
+		rest_class = number_of_classical_song - number_of_jazz_song;
+		number_of_classical_song -= rest_class; 
+	} else if (number_of_classical_song < number_of_jazz_song) {
+		rest_jazz = number_of_jazz_song - number_of_classical_song;
+		number_of_jazz_song -= rest_jazz; 
+	}
+	if (number_of_classical_song < 2 || number_of_jazz_song < 2) {
+		std::cerr << "Not enough dataset, classical song: " << number_of_classical_song << " jazz song: " << number_of_jazz_song << std::endl;
+	}
+
+	// since the number of classical or jazz song are now equal, we can use either one or the other
+	// we take 3/4 as training set of each music genre and 1/4 as test set
+	int total_test_set = number_of_classical_song / 4;
+	int total_training_set = number_of_classical_song - total_test_set;
+	std::vector<std::vector<float>>	training_set;
+	std::vector<std::vector<float>> test_test;
+
+	// assume that the classical sound are in first and the jazz after them.
+	int i = 0;
+	while (i < total_training_set) {
+		if (i % 2) {
+			training_set.push_back(data_set[i]); 
+		} else {
+			training_set.push_back(data_set[i + kNumberOfClassicalSong]);
+		}
+		++i;
+	}
+	while (i < total_training_set + total_test_set) {
+		if (i % 2) {
+			test_test.push_back(data_set[i]);
+		} else {
+			test_test.push_back(data_set[i + kNumberOfClassicalSong]);
+		}
+		++i;
+	}
+
+	// add the difference of soungs in the training set
+	int total = total_training_set + total_test_set + rest_class + rest_jazz; 
+	while (i < total) {
+		if (rest_class) {
+			training_set.push_back(data_set[i]);
+		} else if (rest_jazz) {
+			training_set.push_back(data_set[i + kNumberOfClassicalSong]);
+		}
+		++i
+	}
+
+	// check if all sound has been treated
+	int total_set = training_set.size() + test_set.size();
+	if (total_set != data_set.size()) {
+		std::cerr << "Some data set are not either in training set or test set, total set with training and test: " << total_set << " and number of datasets : " << data_set.size() << std::endl;
+	}
+
+	FormatDatasetAndWriteInFile(training_set, "training_set", lt);
+	FormatDatasetAndWriteInFile(test_set, "test_set", lt);
 }
 
 void FillLabels(std::vector<std::vector<float>> data_set) {

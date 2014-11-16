@@ -778,8 +778,8 @@ void FillLabels(std::vector<std::vector<float>> &data_set) {
 	//std::cout << "La size du data_set est de : " << data_set.size() << std::endl;
 	int i = 0;
 	for (auto &tuple : data_set) {
-		tuple[kArousalIndex] = std::atof(output[i].c_str());
-		tuple[kValenceIndex] = std::atof(output[i + 1].c_str());
+		tuple[kValenceIndex] = std::atof(output[i].c_str());
+		tuple[kArousalIndex] = std::atof(output[i + 1].c_str());
 		i += 2;
 	}
 }

@@ -35,7 +35,7 @@
 namespace {
 
 	const unsigned int kBlockSize = 1024;
-	const unsigned int kNumberOfJazzSong = 85;
+	const unsigned int kNumberOfJazzSong = 83; // two removed because they were too short
 	const unsigned int kNumberOfClassicalSong = 65;
 
 	using Complex = std::complex<double>;
@@ -122,6 +122,35 @@ namespace {
 		VALENCE,
 		MULTILABEL,
 		NUMBER_OF_LABEL_TYPES,
+	};
+
+	enum Features features_array[] = {
+		BPM, // OK
+		AVERAGE_ENERGY, // OK
+		ENERGY_STANDARD_DEVIATION, // OK
+		AVERAGE_FUNDAMENTAL_FREQUENCY,
+		FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION,
+		NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY,
+		AVERAGE_CENTROID, // OK
+		CENTROID_STANDARD_DEVIATION, // OK
+		MODE, // OK
+		KEY, // OK
+		GENDER, // OK
+		NUMBER_OF_FEATURES
+	};
+
+	std::string features_to_string[] = {
+		"BPM",
+		"AVERAGE_ENERGY",
+		"ENERGY_STANDARD_DEVIATION",
+		"AVERAGE_FUNDAMENTAL_FREQUENCY",
+		"FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION",
+		"NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY",
+		"AVERAGE_CENTROID",
+		"CENTROID_STANDARD_DEVIATION",
+		"MODE",
+		"KEY",
+		"GENDER"
 	};
 
 }
@@ -478,13 +507,13 @@ void	WavFeatures(std::vector<float> &tuple, std::string const &song_wav_path) {
 void	FillFeatures(std::vector<float> &tuple, int song_id, std::string const &song_midi_path,
 					std::string const &song_wav_path) {
 	//std::cout << "Name is : " << song_midi_path << std::endl;
-	tuple.reserve(NUMBER_OF_FEATURES);
-	//MidiFeatures(tuple, song_id, song_midi_path);
+	tuple.resize(NUMBER_OF_FEATURES + MULTILABEL);
+	MidiFeatures(tuple, song_id, song_midi_path);
 	WavFeatures(tuple, song_wav_path);
-	//std::cout << "The beat is : " << tuple[BPM] << std::endl;
-	//std::cout << "The mode is : " << tuple[MODE] << std::endl;
-	//std::cout << "The key is : " << tuple[KEY] << std::endl;
-	//std::cout << "The gender is : " << tuple[GENDER] << std::endl;
+	std::cout << "The beat is : " << tuple[BPM] << std::endl;
+	std::cout << "The mode is : " << tuple[MODE] << std::endl;
+	std::cout << "The key is : " << tuple[KEY] << std::endl;
+	std::cout << "The gender is : " << tuple[GENDER] << std::endl;
 	std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
 	std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
 	std::cout << "The average energy is : " << tuple[AVERAGE_ENERGY] << std::endl;
@@ -540,35 +569,6 @@ int Factorial(int n)
 {
   return (n == 1 || n == 0) ? 1 : Factorial(n - 1) * n;
 }
-
-enum Features features_array[] = {
-	BPM, // OK
-	AVERAGE_ENERGY, // OK
-	ENERGY_STANDARD_DEVIATION, // OK
-	AVERAGE_FUNDAMENTAL_FREQUENCY,
-	FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION,
-	NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY,
-	AVERAGE_CENTROID, // OK
-	CENTROID_STANDARD_DEVIATION, // OK
-	MODE, // OK
-	KEY, // OK
-	GENDER, // OK
-	NUMBER_OF_FEATURES
-};
-
-std::string features_to_string[] = {
-	"BPM",
-	"AVERAGE_ENERGY",
-	"ENERGY_STANDARD_DEVIATION",
-	"AVERAGE_FUNDAMENTAL_FREQUENCY",
-	"FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION",
-	"NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY",
-	"AVERAGE_CENTROID",
-	"CENTROID_STANDARD_DEVIATION",
-	"MODE",
-	"KEY",
-	"GENDER"
-};
 
 void InitializeFeaturesInUse(std::vector<int> &features_in_use) {
 	int i = features_in_use.size() - 1;
@@ -708,27 +708,88 @@ char *labels_to_string[] = {
 	"MULTILABEL"
 };
 
-void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> data_set, enum LabelTypes lt) {
-	// MARC
-	// Create the training set here.
-	// Give it to FormatDatasetAndWriteInFile();. Don't forget to create a good filename.
-	std::vector<std::vector<float>> training_set;
+void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
+		std::vector<std::vector<float>> &training_set,
+		std::vector<std::vector<float>> &test_set) {
+	int number_of_classical_song = kNumberOfClassicalSong;
+	int number_of_jazz_song = kNumberOfJazzSong;
+	int	rest_jazz = 0;
+	int rest_class = 0;
+	if (number_of_classical_song > number_of_jazz_song) {
+		rest_class = number_of_classical_song - number_of_jazz_song;
+		number_of_classical_song -= rest_class; 
+	} else if (number_of_classical_song < number_of_jazz_song) {
+		rest_jazz = number_of_jazz_song - number_of_classical_song;
+		number_of_jazz_song -= rest_jazz; 
+	}
+	if (number_of_classical_song < 2 || number_of_jazz_song < 2) {
+		std::cerr << "Not enough dataset, classical song: " << number_of_classical_song << " jazz song: " << number_of_jazz_song << std::endl;
+	}
 
-	// Create the test set here.
-	// Give it to FormatDatasetAndWriteInFile();. Don't forget to create a good filename.
+	// since the number of classical or jazz song are now equal, we can use either one or the other
+	// we take 3/4 as training set of each music genre and 1/4 as test set
+	int total_test_set = number_of_classical_song / 4;
+	int total_training_set = number_of_classical_song - total_test_set;
+
+	// assume that the classical sound are in first and the jazz after them.
+	int i = 0;
+	while (i < total_training_set) {
+		if (i % 2) {
+			training_set.push_back(data_set[i]); 
+		} else {
+			training_set.push_back(data_set[i + kNumberOfClassicalSong]);
+		}
+		++i;
+	}
+	while (i < total_training_set + total_test_set) {
+		if (i % 2) {
+			test_set.push_back(data_set[i]);
+		} else {
+			test_set.push_back(data_set[i + kNumberOfClassicalSong]);
+		}
+		++i;
+	}
+
+	// add the difference of soungs in the training set
+	int total = total_training_set + total_test_set + rest_class + rest_jazz; 
+	while (i < total) {
+		if (rest_class) {
+			training_set.push_back(data_set[i]);
+		} else if (rest_jazz) {
+			training_set.push_back(data_set[i + kNumberOfClassicalSong]);
+		}
+		++i;
+	}
+
+	// check if all sound has been treated
+	int total_set = training_set.size() + test_set.size();
+	if (total_set != data_set.size()) {
+		std::cerr << "Some data set are not either in training set or test set, total set with training and test: " << total_set << " and number of datasets : " << data_set.size() << std::endl;
+	}
+
+	// Mettre le bon path
+	//FormatDatasetAndWriteInFile(training_set, "training_set", lt);
+	//FormatDatasetAndWriteInFile(test_set, "test_set", lt);
+}
+
+void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> const &data_set, enum LabelTypes lt) {
+	std::vector<std::vector<float>> training_set;
 	std::vector<std::vector<float>> test_set;
 
+	FillTrainingSetAndTestSet(data_set, training_set, test_set);
 
 	struct s_classification_result *best_result =
 		GenerateAllCombinaisonsAndChooseTheBest(training_set, test_set, lt);
-	std::string filename = FindFeatureFileName(best_result->features_ids);
-	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[lt]) + ".dataset";
-	ExecCommand(cmd);
+//	std::string filename = FindFeatureFileName(best_result->features_ids);
+//	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[lt]) + ".dataset";
+//	ExecCommand(cmd);
 }
 
 void FillLabels(std::vector<std::vector<float>> data_set) {
-	std::string cmd = "cat merge_results_script/merge";
+	std::string cmd = "cat merge_results_script/Merged_Results.txt";
 	std::vector<std::string> output = ExecCommand(cmd);
+	std::cout << "La size de l'ouput est de : " << output.size() << std::endl;
+	std::cout << "La size du data_set est de : " << data_set.size() << std::endl;
 	int i = 0;
 	for (auto &tuple : data_set) {
 		//std::vector<std::string> splited_line = Split(output[i++], ' ');
@@ -740,7 +801,9 @@ void FillLabels(std::vector<std::vector<float>> data_set) {
 
 int main(int ac, char **av) {
 	std::vector<std::vector<float>> data_set(1);//kNumberOfClassicalSong + kNumberOfJazzSong); 
-	
+	std::vector<std::vector<float>> training_set;
+	std::vector<std::vector<float>> test_set;
+
 	if (ac < 2) {
 		std::cout << "Usage:" << av[0] << " <training_directory>" << std::endl;
 		return 1;
@@ -753,8 +816,24 @@ int main(int ac, char **av) {
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
 		}
 	}
+	std::cout << "Feature filled now filling labels." << std::endl;
 	FillLabels(data_set);
-	GenerateFinalTrainingAndTestSet(data_set, AROUSAL);
-	//GenerateFinalTrainingAndTestSet(data_set, VALENCE);
+	std::cout << "labels filled now creating training and test set." << std::endl;
+	FillTrainingSetAndTestSet(data_set, training_set, test_set);
+	// struct s_classification_result *best_arousal_features_result =
+	// 	GenerateAllCombinaisonsAndChooseTheBest(training_set, test_set, AROUSAL);
+	std::cout << "Training and test set done now finding best combinaisons." << std::endl;
+	struct s_classification_result *best_valence_features_result =
+		GenerateAllCombinaisonsAndChooseTheBest(training_set, test_set, VALENCE);
+	std::string filename = FindFeatureFileName(best_valence_features_result->features_ids);
+	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[VALENCE]) + ".dataset";
+	ExecCommand(cmd);
+	cmd = "cp " + filename + std::string(".test") + " final_datasets/" + std::string(labels_to_string[VALENCE]) + ".dataset.test";
+	ExecCommand(cmd);
+
+
+
+//	GenerateFinalTrainingAndTestSet(data_set, AROUSAL);
+//	GenerateFinalTrainingAndTestSet(data_set, VALENCE);
     return 0;
 }

@@ -49,7 +49,7 @@ namespace {
 
 	std::vector<std::string> kFormatToString = {
 		".mid",
-		".wav",
+		"trimmed.wav",
 	};
 
 	enum Genders {

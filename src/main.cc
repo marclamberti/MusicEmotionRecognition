@@ -713,25 +713,31 @@ struct s_classification_result *GenerateAllCombinaisonsAndChooseTheBest(
 
 void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		std::vector<std::vector<float>> &training_set,
-		std::vector<std::vector<float>> &test_set, int number_of_classical_song, int number_of_jazz_song) {
+		std::vector<std::vector<float>> &test_set, int number_of_classical_songs, int number_of_jazz_songs) {
 
 	std::vector<std::vector<float>>	tmp_data_set(data_set);
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    int	max_test_set = data_set.size() / 4;
-    int max_training_set = data_set.size() - max_test_set;
-    while (!tmp_data_set.empty()) {
-   		std::uniform_int_distribution<> dis(0, tmp_data_set.size() - 1);
-   		int	i = dis(gen);
-   		if (training_set.size() < max_training_set) {
-   			training_set.push_back(tmp_data_set[i]);
-   		} else {
-   			test_set.push_back(tmp_data_set[i]);
-   		}
-   		tmp_data_set.erase(tmp_data_set.begin() + i);
-    }
+	int i = 0;
+	int max_test_set = number_of_classical_songs / 4;
+	int max_training_set = number_of_classical_songs - max_test_set;
+	while (i < max_training_set) {
+		training_set.push_back(data_set[i]);
+		++i;
+	}
+	while (i < max_training_set + max_test_set) {
+		test_set.push_back(data_set[i]);
+		++i;
+	}
+	max_test_set = number_of_jazz_songs / 4;
+	max_training_set =  number_of_jazz_songs - max_test_set;
+	while (i < number_of_classical_songs + max_training_set) {
+		training_set.push_back(data_set[i]);
+		++i;
+	}
+	while (i < number_of_classical_songs + max_training_set + max_test_set) {
+		test_set.push_back(data_set[i]);
+		++i;
+	}
 
 	// check if all sound has been treated
 	int total_set = training_set.size() + test_set.size();
@@ -784,11 +790,21 @@ void FillLabels(std::vector<std::vector<float>> &data_set) {
 	}
 }
 
+void	UpdateNumberSongsByGender(const std::vector<float> &tuple, int &number_of_classical_songs, int &number_of_jazz_songs) {
+	if (tuple[GENDER] == Genders::JAZZ) {
+		++number_of_jazz_songs;
+	} else {
+		++number_of_classical_songs;
+	}
+}
+
 int main(int ac, char **av) {
 	std::set<std::string> files;
 	std::vector<std::vector<float>> data_set;
 	std::vector<std::vector<float>> training_set;
 	std::vector<std::vector<float>> test_set;
+	int	number_of_classical_songs = 0;
+	int number_of_jazz_songs = 0;
 
 	if (ac < 2) {
 		std::cout << "Usage:" << av[0] << " <training_directory>" << std::endl;
@@ -798,6 +814,7 @@ int main(int ac, char **av) {
 	int song_limit = 70;
 	std::string	directory_path = av[1] + std::string("/");
 	GetSongsInDirectory(directory_path, files);
+
 	int i = 0;
 	for (auto it = files.begin(); it != files.end() && i < song_limit; ++it, ++i) {
 		std::vector<float> tuple;
@@ -807,15 +824,17 @@ int main(int ac, char **av) {
 		std::string song_wav_path = directory_path + wav_file;
 		std::cout << "Sound " << song_midi_path << " , " << song_wav_path << " in progress..." << std::endl;
 		FillFeatures(tuple, song_midi_path, song_wav_path);
+		UpdateNumberSongsByGender(tuple, number_of_classical_songs, number_of_jazz_songs);
 		data_set.push_back(tuple);
 	}
-
+	std::cout << "Number of classical songs: " << number_of_classical_songs << ", number of jazz songs: " << number_of_jazz_songs << std::endl;
 	std::cout << "Feature filled now filling labels." << std::endl;
 	FillLabels(data_set);
 
 	std::cout << "labels filled now creating training and test set." << std::endl;
-	FillTrainingSetAndTestSet(data_set, training_set, test_set, 5, 5);
+	FillTrainingSetAndTestSet(data_set, training_set, test_set, number_of_classical_songs, number_of_jazz_songs);
 
+	std::cout << "Size of training set: " << training_set.size() << ", size of test set: " << test_set.size() << std::endl;		
 	std::cout << "Training and test set done now finding best combinaisons." << std::endl;
 	GenerateFinalTrainingAndTestSet(training_set, test_set, AROUSAL);
 	//GenerateFinalTrainingAndTestSet(training_set, test_set, VALENCE);

@@ -278,7 +278,6 @@ void	MidiFeatures(std::vector<float> &tuple, int song_id, std::string const &son
 	tuple[GENDER] = static_cast<float>(ExtractGender(song_id));
 }
 
-
 // Cooley–Tukey FFT (in-place)
 void FFT(CArray& x)
 {
@@ -341,7 +340,6 @@ float GetFrequenceFromBin(const CArray &fft_data, int f_bin, std::uint64_t sampl
     double freq = cf + freq_diff;
     return freq;
 }
-
 
 /**
  * If the input signal is a musical note, then its spectrum should consist of a series of peaks, 

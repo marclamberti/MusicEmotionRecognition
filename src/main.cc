@@ -89,17 +89,17 @@ namespace {
 	int kTempoIndex = 6;
 
 	enum Features {
-		BPM, // OK
-		AVERAGE_ENERGY, // OK
-		ENERGY_STANDARD_DEVIATION, // OK
-		AVERAGE_FUNDAMENTAL_FREQUENCY, // OK
-		FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION, // OK
-		NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY, // OK
-		AVERAGE_CENTROID, // OK
-		CENTROID_STANDARD_DEVIATION, // OK
-		MODE, // OK
-		KEY, // OK
-		GENDER, // OK
+		BPM, // 0
+		AVERAGE_ENERGY, // 1
+		ENERGY_STANDARD_DEVIATION, // 2
+		AVERAGE_FUNDAMENTAL_FREQUENCY, // 3
+		FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION, // 4
+		NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY, // 5
+		AVERAGE_CENTROID, // 6
+		CENTROID_STANDARD_DEVIATION, // 7
+		MODE, // 8
+		KEY, // 9
+		GENDER, // 10
 		NUMBER_OF_FEATURES
 	};
 
@@ -531,9 +531,9 @@ std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {
 	//std::cout << "Tuple size is : " << tuple.size() << std::endl;
 	//std::cout << "The value is " << tuple[tuple.size() - 1] << " & The value written is " << std::to_string(tuple[tuple.size() - 1]) << std::endl;
 
-	int i = 0;
+	int i = 1;
 	for (auto const &attribute : tuple) {
-		if (i < tuple.size() - 1)
+		if (i < tuple.size())
 			formatted_tuple += " " + std::to_string(i++) + ':' + std::to_string(attribute);
 	}
 	return formatted_tuple;
@@ -760,7 +760,7 @@ void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> const &trai
 	std::cout << " ------------ THE BEST RESULT ------------ " << std::endl;
 	std::cout << "Feature used : ";
 	for (int i : best_result->features_ids) {
-		std::cout << features_to_string[i] << " ";
+		std::cout << features_to_string[i] << " "  << i << " ";
 	}
 	std::cout << std::endl;
 	std::cout << "The mean square error is : " << best_result->accuracy << std::endl;
@@ -784,8 +784,8 @@ void FillLabels(std::vector<std::vector<float>> &data_set) {
 	//std::cout << "La size du data_set est de : " << data_set.size() << std::endl;
 	int i = 0;
 	for (auto &tuple : data_set) {
-		tuple[kArousalIndex] = std::atof(output[i].c_str());
-		tuple[kValenceIndex] = std::atof(output[i + 1].c_str());
+		tuple[kArousalIndex] = std::atof(output[i + 1].c_str());
+		tuple[kValenceIndex] = std::atof(output[i].c_str());
 		i += 2;
 	}
 }
@@ -811,7 +811,7 @@ int main(int ac, char **av) {
 		return 1;
 	}
 	
-	int song_limit = 70;
+	int song_limit = 20;
 	std::string	directory_path = av[1] + std::string("/");
 	GetSongsInDirectory(directory_path, files);
 
@@ -836,7 +836,7 @@ int main(int ac, char **av) {
 
 	std::cout << "Size of training set: " << training_set.size() << ", size of test set: " << test_set.size() << std::endl;		
 	std::cout << "Training and test set done now finding best combinaisons." << std::endl;
-	GenerateFinalTrainingAndTestSet(training_set, test_set, AROUSAL);
-	//GenerateFinalTrainingAndTestSet(training_set, test_set, VALENCE);
+	GenerateFinalTrainingAndTestSet(training_set, test_set, VALENCE);
+	//GenerateFinalTrainingAndTestSet(training_set, test_set, AROUSAL);
     return 0;
 }

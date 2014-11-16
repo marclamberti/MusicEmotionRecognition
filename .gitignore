@@ -8,5 +8,8 @@ src/*.o
 #ignore .wav
 *.wav
 
+#ignore combinations
+combinaisons/*
+
 #ignore OSX files
 .DS_Store

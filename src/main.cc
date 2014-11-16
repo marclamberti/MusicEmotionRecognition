@@ -131,6 +131,7 @@ namespace {
 	std::string kFinalDataSetDirectory = "final_datasets";
 	std::string kTrainingSetExtension = ".dataset";
 	std::string kTestSetExtension = ".test";
+	std::string kCombinaisonsDirectory = "combinaisons";
 
 	const char *labels_to_string[] = {
 		"AROUSAL",
@@ -497,30 +498,42 @@ void	FillFeatures(std::vector<float> &tuple, std::string const &song_midi_path,
 	tuple.resize(NUMBER_OF_FEATURES + MULTILABEL);
 	MidiFeatures(tuple, song_midi_path);
 	WavFeatures(tuple, song_wav_path);
-	std::cout << "The beat is : " << tuple[BPM] << std::endl;
-	std::cout << "The mode is : " << tuple[MODE] << std::endl;
-	std::cout << "The key is : " << tuple[KEY] << std::endl;
-	std::cout << "The gender is : " << tuple[GENDER] << std::endl;
-	std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
-	std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
-	std::cout << "The average energy is : " << tuple[AVERAGE_ENERGY] << std::endl;
-	std::cout << "The standard deviation of energy is : " << tuple[ENERGY_STANDARD_DEVIATION] << std::endl;
-	std::cout << "The average f0 is : " << tuple[AVERAGE_FUNDAMENTAL_FREQUENCY] << std::endl;
-	std::cout << "The standard deviation of f0 is : " << tuple[FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION] << std::endl;
-	std::cout << "The number of f0 higher than the average of f0 is : " << tuple[NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY] << std::endl;
+	// std::cout << "The beat is : " << tuple[BPM] << std::endl;
+	// std::cout << "The mode is : " << tuple[MODE] << std::endl;
+	// std::cout << "The key is : " << tuple[KEY] << std::endl;
+	// std::cout << "The gender is : " << tuple[GENDER] << std::endl;
+	// std::cout << "The average centroids is : " << tuple[AVERAGE_CENTROID] << std::endl;
+	// std::cout << "The standard deviation of centroids is : " << tuple[CENTROID_STANDARD_DEVIATION] << std::endl;
+	// std::cout << "The average energy is : " << tuple[AVERAGE_ENERGY] << std::endl;
+	// std::cout << "The standard deviation of energy is : " << tuple[ENERGY_STANDARD_DEVIATION] << std::endl;
+	// std::cout << "The average f0 is : " << tuple[AVERAGE_FUNDAMENTAL_FREQUENCY] << std::endl;
+	// std::cout << "The standard deviation of f0 is : " << tuple[FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION] << std::endl;
+	// std::cout << "The number of f0 higher than the average of f0 is : " << tuple[NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY] << std::endl;
 }
 
 std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {
 	std::string formatted_tuple;
 
-	if (lt == LabelTypes::AROUSAL || lt == LabelTypes::MULTILABEL)
-		formatted_tuple += std::to_string(tuple[kArousalIndex]);
-	if (lt == LabelTypes::VALENCE || lt == LabelTypes::MULTILABEL)
-		formatted_tuple += std::to_string(tuple[kArousalIndex]);
+	const int kValenceOffsetFromEnd = 2;
+	const int kArousalOffsetFromEnd = 1;
 
-	int i = 1;
+
+	if (lt == LabelTypes::AROUSAL) {
+		formatted_tuple += std::to_string(tuple[tuple.size() - 1]);
+	}
+	else if (lt == LabelTypes::VALENCE) {
+		formatted_tuple += std::to_string(tuple[tuple.size() - 1]);
+	}
+	else {
+		formatted_tuple += std::to_string(tuple[tuple.size() - kValenceOffsetFromEnd]);
+		formatted_tuple += std::to_string(tuple[tuple.size() - kArousalOffsetFromEnd]);
+	}
+	//std::cout << "Tuple size is : " << tuple.size() << std::endl;
+	//std::cout << "The value is " << tuple[tuple.size() - 1] << " & The value written is " << std::to_string(tuple[tuple.size() - 1]) << std::endl;
+
+	int i = 0;
 	for (auto const &attribute : tuple) {
-		if (i <= kLabelIndex)
+		if (i < tuple.size() - 1)
 			formatted_tuple += " " + std::to_string(i++) + ':' + std::to_string(attribute);
 	}
 	return formatted_tuple;
@@ -537,7 +550,7 @@ void FormatDatasetAndWriteInFile(std::vector<std::vector<float>> const &data_set
 
 	for (auto const &tuple : data_set) {
 		std::string line = FormatTuple(tuple, lt);
-		std::cout << "The line : " << line << std::endl;
+		//std::cout << "The line : " << line << std::endl;
 		line += '\n';
 		output_file_stream << line;
 	}
@@ -587,7 +600,7 @@ void UpdateFeaturesInUse(std::vector<int> &features_in_use) {
 }
 
 std::string FindFeatureFileName(std::vector<int> const &features_ids, enum SetType st) {
-	std::string filename = std::string("combinaisons/") + "F" + std::to_string(features_ids.size());
+	std::string filename = "F" + std::to_string(features_ids.size());
 	for (auto const &feature : features_ids) {
 		filename += "_";
 		filename += std::to_string(feature);//features_to_string[feature];
@@ -649,20 +662,26 @@ std::vector<struct s_classification_result *> GenerateCombinaisons(
 		// 		tuple_with_new_features.push_back(tuple[kArousalIndex]);
 		// 	result->data_set.push_back(tuple_with_new_features);
 		// }
-
 		std::string training_filename = FindFeatureFileName(result->features_ids, TRAINING_SET);
-		FormatDatasetAndWriteInFile(result->training_set, training_filename, lt);
+		std::string training_file_path = kCombinaisonsDirectory + "/" + training_filename;
 		std::string test_filename = FindFeatureFileName(result->features_ids, TEST_SET);
-		FormatDatasetAndWriteInFile(result->training_set, test_filename, lt);
+		std::string test_file_path = kCombinaisonsDirectory + "/" +  test_filename;
 
-		std::string first_cmd = "svm-train  -s 4 -t 2 " + training_filename;
+		FormatDatasetAndWriteInFile(result->training_set, training_file_path, lt);
+		FormatDatasetAndWriteInFile(result->test_set, test_file_path, lt);
+		std::string kModelDirectory = "model_files";
+
+std::string kSVMOutputFileDirectory = "svm_output_files";
+
+		std::string first_cmd = "svm-train -s 4 -t 2 " + training_file_path + " "
+			+ kModelDirectory + "/" + training_filename + ".model";
 		ExecCommand(first_cmd);
-		std::string second_cmd = "svm-predict " + training_filename + ".model " + test_filename;
+		std::string second_cmd = "svm-predict " + test_file_path + " "
+			+ kModelDirectory + "/" + training_filename + ".model" + " "
+			+ kSVMOutputFileDirectory + "/" + training_filename.substr(0, training_filename.find('.'));
 		std::vector<std::string> output = ExecCommand(second_cmd);
-		// Test and put a value at this split
-		std::string accuracy_in_string = Split(output[2], ' ')[1];
-		result->accuracy = std::atof(accuracy_in_string.substr(0, accuracy_in_string.size() - 1).c_str());
-
+		std::string accuracy_in_string = Split(output[0], ' ')[4];
+		result->accuracy = std::atof(accuracy_in_string.c_str());
 		combinaisons.push_back(result);
 		if (i + 1 != number_of_combinaison)
 			UpdateFeaturesInUse(features_in_use);
@@ -681,7 +700,7 @@ struct s_classification_result *GenerateAllCombinaisonsAndChooseTheBest(
 		for (auto &result : results) {
 			if (!best_result)
 				best_result = result;
-			else if (best_result->accuracy < result->accuracy)
+			else if (best_result->accuracy > result->accuracy)
 				best_result = result;
 		}
 		for (auto &result : results) {
@@ -732,30 +751,39 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 }
 
 void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> const &training_set,
-		std::vector<std::vector<float>> test_set, enum LabelTypes lt) {
+		std::vector<std::vector<float>> const &test_set, enum LabelTypes lt) {
 
 	struct s_classification_result *best_result =
 		GenerateAllCombinaisonsAndChooseTheBest(training_set, test_set, lt);
+
+
+	std::cout << " ------------ THE BEST RESULT ------------ " << std::endl;
+	std::cout << "Feature used : ";
+	for (int i : best_result->features_ids) {
+		std::cout << features_to_string[i] << " ";
+	}
+	std::cout << std::endl;
+	std::cout << "The mean square error is : " << best_result->accuracy << std::endl;
+	std::cout << " ------------------------------------------ " << std::endl;
+
 	std::string training_set_filename = FindFeatureFileName(best_result->features_ids, TRAINING_SET);
 	std::string test_set_filename = FindFeatureFileName(best_result->features_ids, TEST_SET);
 
-
-	std::string cmd = "cp " + training_set_filename + " " + kFinalDataSetDirectory + "/" + 
-			std::string(labels_to_string[lt]) + kTrainingSetExtension;
+	std::string cmd = "cp " + kCombinaisonsDirectory + "/" + training_set_filename + " " + 
+			kFinalDataSetDirectory + "/" + std::string(labels_to_string[lt]) + kTrainingSetExtension;
 	ExecCommand(cmd);
-	cmd = "cp " + test_set_filename + std::string(".test ") + kFinalDataSetDirectory +  "/" +
-			std::string(labels_to_string[lt]) + kTestSetExtension;
+	cmd = "cp " + kCombinaisonsDirectory + "/" + test_set_filename + " "
+			+ kFinalDataSetDirectory +  "/" + std::string(labels_to_string[lt]) + kTestSetExtension;
 	ExecCommand(cmd);
 }
 
-void FillLabels(std::vector<std::vector<float>> data_set) {
+void FillLabels(std::vector<std::vector<float>> &data_set) {
 	std::string cmd = "cat merge_results_script/Merged_Results.txt";
 	std::vector<std::string> output = ExecCommand(cmd);
-	std::cout << "La size de l'ouput est de : " << output.size() << std::endl;
-	std::cout << "La size du data_set est de : " << data_set.size() << std::endl;
+	//std::cout << "La size de l'ouput est de : " << output.size() << std::endl;
+	//std::cout << "La size du data_set est de : " << data_set.size() << std::endl;
 	int i = 0;
 	for (auto &tuple : data_set) {
-		//std::vector<std::string> splited_line = Split(output[i++], ' ');
 		tuple[kArousalIndex] = std::atof(output[i].c_str());
 		tuple[kValenceIndex] = std::atof(output[i + 1].c_str());
 		i += 2;
@@ -783,7 +811,7 @@ int main(int ac, char **av) {
 		return 1;
 	}
 	
-	int song_limit = 10;
+	int song_limit = 70;
 	std::string	directory_path = av[1] + std::string("/");
 	GetSongsInDirectory(directory_path, files);
 
@@ -809,6 +837,6 @@ int main(int ac, char **av) {
 	std::cout << "Size of training set: " << training_set.size() << ", size of test set: " << test_set.size() << std::endl;		
 	std::cout << "Training and test set done now finding best combinaisons." << std::endl;
 	GenerateFinalTrainingAndTestSet(training_set, test_set, AROUSAL);
-	GenerateFinalTrainingAndTestSet(training_set, test_set, VALENCE);
+	//GenerateFinalTrainingAndTestSet(training_set, test_set, VALENCE);
     return 0;
 }

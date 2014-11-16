@@ -153,6 +153,21 @@ namespace {
 		"GENDER"
 	};
 
+	std::string kFinalDataSetDirectory = "final_datasets";
+	std::string kTrainingSetExtension = ".dataset";
+	std::string kTestSetExtension = ".test";
+
+	char *labels_to_string[] = {
+		"AROUSAL",
+		"VALENCE",
+		"MULTILABEL"
+	};
+
+	enum SetType {
+		TRAINING_SET,
+		TEST_SET,
+		NUMBER_OF_SET_TYPE
+	};
 }
 
 std::string	GetFileExtension(std::string file) {
@@ -599,13 +614,16 @@ void UpdateFeaturesInUse(std::vector<int> &features_in_use) {
 	}
 }
 
-std::string FindFeatureFileName(std::vector<int> const &features_ids) {
+std::string FindFeatureFileName(std::vector<int> const &features_ids, enum SetType st) {
 	std::string filename = std::string("combinaisons/") + "F" + std::to_string(features_ids.size());
 	for (auto const &feature : features_ids) {
 		filename += "_";
 		filename += std::to_string(feature);//features_to_string[feature];
 	}
-	filename += ".dataset";
+	if (st == TRAINING_SET)
+		filename += ".dataset";
+	else if (st == TEST_SET)
+		filename += ".test";
 	return filename;
 }
 
@@ -660,9 +678,9 @@ std::vector<struct s_classification_result *> GenerateCombinaisons(
 		// 	result->data_set.push_back(tuple_with_new_features);
 		// }
 
-		std::string training_filename = FindFeatureFileName(result->features_ids);
+		std::string training_filename = FindFeatureFileName(result->features_ids, TRAINING_SET);
 		FormatDatasetAndWriteInFile(result->training_set, training_filename, lt);
-		std::string test_filename = FindFeatureFileName(result->features_ids) + ".test";
+		std::string test_filename = FindFeatureFileName(result->features_ids, TEST_SET);
 		FormatDatasetAndWriteInFile(result->training_set, test_filename, lt);
 
 		std::string first_cmd = "svm-train  -s 4 -t 2 " + training_filename;
@@ -701,12 +719,6 @@ struct s_classification_result *GenerateAllCombinaisonsAndChooseTheBest(
 	}
 	return best_result;
 }
-
-char *labels_to_string[] = {
-	"AROUSAL",
-	"VALENCE",
-	"MULTILABEL"
-};
 
 void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		std::vector<std::vector<float>> &training_set,
@@ -772,17 +784,21 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 	//FormatDatasetAndWriteInFile(test_set, "test_set", lt);
 }
 
-void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> const &data_set, enum LabelTypes lt) {
-	std::vector<std::vector<float>> training_set;
-	std::vector<std::vector<float>> test_set;
-
-	FillTrainingSetAndTestSet(data_set, training_set, test_set);
+void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> const &training_set,
+		std::vector<std::vector<float>> test_set, enum LabelTypes lt) {
 
 	struct s_classification_result *best_result =
 		GenerateAllCombinaisonsAndChooseTheBest(training_set, test_set, lt);
-//	std::string filename = FindFeatureFileName(best_result->features_ids);
-//	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[lt]) + ".dataset";
-//	ExecCommand(cmd);
+	std::string training_set_filename = FindFeatureFileName(best_result->features_ids, TRAINING_SET);
+	std::string test_set_filename = FindFeatureFileName(best_result->features_ids, TEST_SET);
+
+
+	std::string cmd = "cp " + training_set_filename + " " + kFinalDataSetDirectory + "/" + 
+			std::string(labels_to_string[lt]) + kTrainingSetExtension;
+	ExecCommand(cmd);
+	cmd = "cp " + test_set_filename + std::string(".test ") + kFinalDataSetDirectory +  "/" +
+			std::string(labels_to_string[lt]) + kTestSetExtension;
+	ExecCommand(cmd);
 }
 
 void FillLabels(std::vector<std::vector<float>> data_set) {
@@ -818,22 +834,12 @@ int main(int ac, char **av) {
 	}
 	std::cout << "Feature filled now filling labels." << std::endl;
 	FillLabels(data_set);
+
 	std::cout << "labels filled now creating training and test set." << std::endl;
 	FillTrainingSetAndTestSet(data_set, training_set, test_set);
-	// struct s_classification_result *best_arousal_features_result =
-	// 	GenerateAllCombinaisonsAndChooseTheBest(training_set, test_set, AROUSAL);
+
 	std::cout << "Training and test set done now finding best combinaisons." << std::endl;
-	struct s_classification_result *best_valence_features_result =
-		GenerateAllCombinaisonsAndChooseTheBest(training_set, test_set, VALENCE);
-	std::string filename = FindFeatureFileName(best_valence_features_result->features_ids);
-	std::string cmd = "cp " + filename + " final_datasets/" + std::string(labels_to_string[VALENCE]) + ".dataset";
-	ExecCommand(cmd);
-	cmd = "cp " + filename + std::string(".test") + " final_datasets/" + std::string(labels_to_string[VALENCE]) + ".dataset.test";
-	ExecCommand(cmd);
-
-
-
-//	GenerateFinalTrainingAndTestSet(data_set, AROUSAL);
-//	GenerateFinalTrainingAndTestSet(data_set, VALENCE);
+	GenerateFinalTrainingAndTestSet(training_set, test_set, AROUSAL);
+	GenerateFinalTrainingAndTestSet(training_set, test_set, VALENCE);
     return 0;
 }

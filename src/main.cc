@@ -722,9 +722,7 @@ struct s_classification_result *GenerateAllCombinaisonsAndChooseTheBest(
 
 void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		std::vector<std::vector<float>> &training_set,
-		std::vector<std::vector<float>> &test_set) {
-	int number_of_classical_song = kNumberOfClassicalSong;
-	int number_of_jazz_song = kNumberOfJazzSong;
+		std::vector<std::vector<float>> &test_set, int number_of_classical_song, int number_of_jazz_song) {
 	int	rest_jazz = 0;
 	int rest_class = 0;
 	if (number_of_classical_song > number_of_jazz_song) {
@@ -749,7 +747,7 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		if (i % 2) {
 			training_set.push_back(data_set[i]); 
 		} else {
-			training_set.push_back(data_set[i + kNumberOfClassicalSong]);
+			training_set.push_back(data_set[i + number_of_classical_song]);
 		}
 		++i;
 	}
@@ -757,7 +755,7 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		if (i % 2) {
 			test_set.push_back(data_set[i]);
 		} else {
-			test_set.push_back(data_set[i + kNumberOfClassicalSong]);
+			test_set.push_back(data_set[i + number_of_classical_song]);
 		}
 		++i;
 	}
@@ -768,7 +766,7 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		if (rest_class) {
 			training_set.push_back(data_set[i]);
 		} else if (rest_jazz) {
-			training_set.push_back(data_set[i + kNumberOfClassicalSong]);
+			training_set.push_back(data_set[i + number_of_classical_song]);
 		}
 		++i;
 	}
@@ -816,7 +814,7 @@ void FillLabels(std::vector<std::vector<float>> data_set) {
 }
 
 int main(int ac, char **av) {
-	std::vector<std::vector<float>> data_set(1);//kNumberOfClassicalSong + kNumberOfJazzSong); 
+	std::vector<std::vector<float>> data_set(20);//kNumberOfClassicalSong + kNumberOfJazzSong); 
 	std::vector<std::vector<float>> training_set;
 	std::vector<std::vector<float>> test_set;
 
@@ -828,7 +826,8 @@ int main(int ac, char **av) {
 	for (auto &tuple : data_set) {
 		std::string song_midi_path = av[1] + std::string("/") + IdToSongName(song_id, Format::MIDI);
 		std::string song_wav_path = av[1] + std::string("/") + IdToSongName(song_id, Format::WAV);
-		if (song_id < 2) {
+		if (song_id < 20) {
+			std::cout << "Sound " << song_midi_path << " , " << song_wav_path << " in progress..." << std::endl;
 			FillFeatures(tuple, song_id++, song_midi_path, song_wav_path);
 		}
 	}
@@ -836,7 +835,7 @@ int main(int ac, char **av) {
 	FillLabels(data_set);
 
 	std::cout << "labels filled now creating training and test set." << std::endl;
-	FillTrainingSetAndTestSet(data_set, training_set, test_set);
+	FillTrainingSetAndTestSet(data_set, training_set, test_set, 10, 10);
 
 	std::cout << "Training and test set done now finding best combinaisons." << std::endl;
 	GenerateFinalTrainingAndTestSet(training_set, test_set, AROUSAL);

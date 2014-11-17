@@ -198,8 +198,10 @@ void GetSongsInDirectory(const std::string &directory_path, std::set<std::string
 	if ((dir = opendir(directory_path.c_str())) != NULL) {
 		while ((file = readdir(dir)) != NULL) {
 			lstat(file->d_name, &st);
+			std::cout << "A: " << file->d_name << std::endl;
 			if (S_ISREG(st.st_mode)) {
 				std::string fn = file->d_name;
+				std::cout << "FILE: " << fn << std::endl;
 				if (fn.substr(fn.find_last_of(".") + 1) == "wav" || fn.substr(fn.find_last_of(".") + 1) == "mid") {
 					files.insert(fn);
 				}
@@ -717,6 +719,7 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 
 	std::vector<std::vector<float>>	tmp_data_set(data_set);
 
+	std::cout << "Dataset size : " << data_set.size() << std::endl;
 	int i = 0;
 	int max_test_set = number_of_classical_songs / 4;
 	int max_training_set = number_of_classical_songs - max_test_set;
@@ -728,6 +731,8 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		test_set.push_back(data_set[i]);
 		++i;
 	}
+	std::cout << "LA 1" << std::endl;
+
 	max_test_set = number_of_jazz_songs / 4;
 	max_training_set =  number_of_jazz_songs - max_test_set;
 	while (i < number_of_classical_songs + max_training_set) {
@@ -738,12 +743,14 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		test_set.push_back(data_set[i]);
 		++i;
 	}
+	std::cout << "LA 2" << std::endl;
 
 	// check if all sound has been treated
 	int total_set = training_set.size() + test_set.size();
 	if (total_set != data_set.size()) {
 		std::cerr << "Some data set are not either in training set or test set, total set with training and test: " << total_set << " and number of datasets : " << data_set.size() << std::endl;
 	}
+	std::cout << "LA 3" << std::endl;
 
 	// Mettre le bon path
 	//FormatDatasetAndWriteInFile(training_set, "training_set", lt);
@@ -784,9 +791,10 @@ void FillLabels(std::vector<std::vector<float>> &data_set) {
 	//std::cout << "La size du data_set est de : " << data_set.size() << std::endl;
 	int i = 0;
 	for (auto &tuple : data_set) {
-		tuple[kValenceIndex] = std::atof(output[i].c_str());
-		tuple[kArousalIndex] = std::atof(output[i + 1].c_str());
-		i += 2;
+		std::vector<std::string> splited_line = Split(output[i], ' ');
+		tuple[kValenceIndex] = std::atof(splited_line[0].c_str());
+		tuple[kArousalIndex] = std::atof(splited_line[1].c_str());
+		++i;
 	}
 }
 
@@ -811,12 +819,15 @@ int main(int ac, char **av) {
 		return 1;
 	}
 	
-	int song_limit = 20;
+	//int song_limit = 20;
 	std::string	directory_path = av[1] + std::string("/");
 	GetSongsInDirectory(directory_path, files);
+	std::cout << "FILES: " << files.size() << std::endl;
 
 	int i = 0;
-	for (auto it = files.begin(); it != files.end() && i < song_limit; ++it, ++i) {
+	for (auto it = files.begin(); it != files.end();// && i < song_limit;
+		 ++it) {//, ++i) {
+		std::cout << "ICI" << std::endl;
 		std::vector<float> tuple;
 		std::string midi_file = *it;
 		std::string wav_file = *(++it);

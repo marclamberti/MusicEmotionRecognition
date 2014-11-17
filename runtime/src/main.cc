@@ -831,10 +831,20 @@ int runtime_main(int ac, char **av){
 
 	FillFeatures(tuple, file_dir + filename + ".mid", file_dir + filename + "_trimmed.wav");
 
+	std::vector<std::vector<float>> tuple_set;
 
-	//std::cout << file_dir + filename + "_trimmed.wav" << std::endl;
+	tuple_set.push_back(tuple);
+	FormatDatasetAndWriteInFile(tuple_set, "test_files/my_arousal", AROUSAL);
+	FormatDatasetAndWriteInFile(tuple_set, "test_files/my_valence", VALENCE);
+
+	ExecCommand("svm-predict test_files/my_arousal model_files/F3_8_4_0.dataset.model output_files/output_arousal");
+	ExecCommand("svm-predict test_files/my_valence model_files/F3_8_6_1.dataset.model output_files/output_valence");
+
 	std::cout << "{\"filename\": \"" << filename << "\", \"features\": " << std::endl;
 	displayTupleJSON(tuple);
+	
+	std::cout << ", \"x\": " << ExecCommand("cat output_files/output_valence")[0] << ", \"y\": ";
+	std::cout << ExecCommand("cat output_files/output_arousal")[0];
 	std::cout << "}";
 	return 0;
 }

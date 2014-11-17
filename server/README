@@ -1,0 +1,2 @@
+Change the path in upload.php.
+Move the data to the root folder of the apache server.

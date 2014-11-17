@@ -2,14 +2,18 @@ svm_type nu_svr
 kernel_type rbf
 gamma 1
 nr_class 2
-total_sv 8
-rho -0.416667
+total_sv 12
+rho 0
 SV
--0.75 1:0 
+1 1:0 
+-1 1:0 
+1 1:0 
+1 1:0 
 1 1:0 
 -1 1:0 
 -1 1:0 
-0.75 1:0 
-1 1:0 
 1 1:0 
 -1 1:0 
+-1 1:0 
+-1 1:1 
+1 1:1 

@@ -396,7 +396,8 @@ void	ExtractFeaturesUsingFFT(std::vector<float> &tuple, std::vector<float> &wav_
 	float sum_centroids = 0.;
 	float sum_fundamental_frequencies = 0.;
 
-	std::cout << "Number of frames: " << wav_data.size() / kBlockSize << std::endl;
+	//todo
+	//std::cout << "Number of frames: " << wav_data.size() / kBlockSize << std::endl;
 	for (int start_block = 0; (start_block + kBlockSize) < wav_data.size(); start_block += kBlockSize >> 1) {
 		windowed.clear();
 
@@ -798,7 +799,51 @@ void	UpdateNumberSongsByGender(const std::vector<float> &tuple, int &number_of_c
 	}
 }
 
+
+std::string file_dir = "data/";
+
+void displayTupleJSON(std::vector<float> tuple){
+	std::cout << "[" << std::endl;
+	std::cout << "{\"name\": \"beat\", \"value\" :\"" << tuple[BPM] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"mode\", \"value\" :\"" << tuple[MODE] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"key\", \"value\" :\"" << tuple[KEY] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"genre\", \"value\" :\"" << tuple[GENDER] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"average centroids\", \"value\" :\"" << tuple[AVERAGE_CENTROID] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"standard deviation of centroids\", \"value\" :\"" << tuple[CENTROID_STANDARD_DEVIATION] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"average energy\", \"value\" :\"" << tuple[AVERAGE_ENERGY] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"standard deviation of energy\", \"value\" :\"" << tuple[ENERGY_STANDARD_DEVIATION] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"average f0\", \"value\" :\"" << tuple[AVERAGE_FUNDAMENTAL_FREQUENCY] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"standard deviation of f0\", \"value\" :\"" << tuple[FUNDAMENTAL_FREQUENCY_STANDARD_DEVIATION] << "\"}, " << std::endl;
+	std::cout << "{\"name\": \"number of f0 higher than the average of f0\", \"value\" :\"" << tuple[NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY] << "\"}" << std::endl;
+	std::cout << "]" << std::endl;
+}
+
+
+// extract features, displays them, evaluates the file
+
+int runtime_main(int ac, char **av){
+	if (ac < 2){
+		std::cout << "ko" << std::endl;
+		return -1;
+	}
+	std::vector<float> tuple;
+	std::string filename = av[1];
+
+	FillFeatures(tuple, file_dir + filename + ".mid", file_dir + filename + "_trimmed.wav");
+
+
+	//std::cout << file_dir + filename + "_trimmed.wav" << std::endl;
+	std::cout << "{\"filename\": \"" << filename << "\", \"features\": " << std::endl;
+	displayTupleJSON(tuple);
+	std::cout << "}";
+	return 0;
+}
+
 int main(int ac, char **av) {
+	//
+	return runtime_main(ac, av);
+	//
+
 	std::set<std::string> files;
 	std::vector<std::vector<float>> data_set;
 	std::vector<std::vector<float>> training_set;

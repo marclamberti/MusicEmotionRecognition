@@ -1,0 +1,347 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>Music Classifer</title>
+
+		<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+		<style type="text/css">
+${demo.css}
+		</style>
+		<script type="text/javascript">
+SIZE = 700;
+
+function distance(a, b){
+    return  Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2));
+}
+
+function biaised_distance(a, b, biais){
+    d = distance(a, b);
+    return d - biais;
+}
+
+function getRandomArray(xa, xb, ya, yb){
+    var out = [];
+    i = 0;
+    while (i < 100){
+        out.push({  'x': Math.random() * (xb - xa) + xa,
+                    'y': Math.random() * (yb - ya) + ya,
+                    'display': i});
+        i++;
+    }
+    return out;
+}
+
+
+var listJazz = [];//getRandomArray(-50, 300, -50, 300);
+var listClass = [];//getRandomArray(-300, 50, -300, 300);
+var listUser = new Array();
+$(function () {
+    chart = $('#container').highcharts({
+        chart: {
+            type: 'scatter',
+            zoomType: 'xy',
+            showAxes: true,
+            width:SIZE,
+            height:SIZE
+        },
+        title: {
+            text: 'Emotion Music Map'
+        },
+        subtitle: {
+            text: 'Source: your mom'
+        },
+        xAxis: {
+            gridLineWidth: '1',
+            title: {
+                enabled: true,
+                text: 'Stress/Valence'
+            },
+            lineWidth: '0',
+            tickWidth: '0',
+            min: -1,
+            max: 1,
+            startOnTick: false,
+            endOnTick: false,
+            showLastLabel: true,
+            plotLines: [{
+                color:'GREY',
+                width:'2',
+                value:'0'
+            }],
+            plotBands: [
+                {
+                    label: {
+                        text: "Angry",
+                        textAlign: 'center',
+                        y: SIZE / 5
+
+                    },
+                    color: 'rgba(0,255,0,.1)', // Color value
+                    from: '-300', // Start of the plot band
+                    to: '0' // End of the plot band
+                },
+                {
+                    label: {
+                        text: "Happy",
+                        textAlign: 'center',
+                        y: SIZE / 5
+
+                    },
+                    color: 'rgba(0,0,255,.1)', // Color value
+                    from: '0', // Start of the plot band
+                    to: '300' // End of the plot band
+                }]
+        },
+        yAxis: {
+            gridLineWidth: '1',
+            title: {
+                 text: 'Energy/Arousal'
+           },
+            plotLines: [{
+                color:'GREY',
+                width:'2',
+                value:'0'
+            }],
+            plotBands: [
+                {
+                   label: {
+                        text: "Sad",
+                        textAlign: 'center',
+                        x: SIZE / 4.5
+
+                    },
+                    color: 'rgba(255,0,0,.1)', // Color value
+                    from: '-300', // Start of the plot band
+                    to: '0' // End of the plot band
+                },
+                {
+                   label: {
+                        text: "Relaxed",
+                        textAlign: 'center',
+                        x: SIZE / 1.53,
+                        y: SIZE / 2.35
+
+                    },
+                    color: 'rgba(128,0,128,.1)', // Color value
+                    from: '300', // Start of the plot band
+                    to: '0' // End of the plot band
+                }],
+            min: -1,
+            max: 1,
+            startOnTick: false,
+            endOnTick: false
+        },
+        legend: {
+            layout: 'vertical',
+            align: 'left',
+            verticalAlign: 'top',
+            x: 100,
+            y: 70,
+            floating: true,
+            backgroundColor: (Highcharts.theme && Highcharts.theme.legendBackgroundColor) || '#FFFFFF',
+            borderWidth: 1
+        },
+        plotOptions: {
+            scatter: {
+                marker: {
+                    radius: 5,
+                    states: {
+                        hover: {
+                            enabled: true,
+                            lineColor: 'rgb(100,100,100)'
+                        }
+                    }
+                },
+                states: {
+                    hover: {
+                        marker: {
+                            enabled: false
+                        }
+                    }
+                },
+                tooltip: {
+                    headerFormat: '<b>{series.name}</b><br>',
+                    pointFormat: '#{point.display}'
+                }
+            }
+        },
+        series: [{
+            name: 'Jazz',
+            color: 'rgba(223, 83, 83, .5)',
+            data: listJazz
+
+        }, {
+            name: 'Classical',
+            color: 'rgba(119, 152, 191, .5)',
+            data: listClass
+        }, {
+            name: 'User',
+            color: 'rgba(119, 52, 191, .5)',
+            data: listUser
+        }]
+    });
+    //console.log($('#container').highcharts());
+
+    /* select a point */
+
+    //console.log($('#container').highcharts().series[0]['data'][1]);
+
+
+});
+		</script>
+	</head>
+	<body>
+<script src="js/highcharts.js"></script>
+<script src="js/modules/exporting.js"></script>
+
+<div id="container" style="min-width: 310px; height: 400px; max-width: 800px; margin: 0 auto"></div>
+<form enctype="multipart/form-data" method="post" name="fileinfo">
+    <select id="select-midi" name="select-midi">
+    </select>
+    <input type="submit" value="Evaluate" />
+</form>
+<div id="data-div">
+</div>
+<script type="text/javascript">
+
+ $.ajax({
+      url: "available.php",
+      type: "GET",
+      data: null,
+      processData: false,  // tell jQuery not to process the data
+      contentType: false   // tell jQuery not to set contentType
+    }).done(function(data){
+        var lines = data.split('\n');
+        for(var i = 0;i < lines.length;i++){
+            $("#select-midi").append("<option value="+lines[i]+">"+lines[i]+"</option>");
+        }
+    });
+
+function    displayFile(filename, genre, features, similarfiles){
+    var div = $("#data-div");
+
+    div.html("");
+    div.append('<p>'+ filename +' ('+ genre +')</p>');
+    div.append('<p>');
+    features.forEach(function(entry) {
+        div.append(entry["name"] + ": " + entry["value"] + "<br/>");
+    });
+    div.append('</p>');
+    div.append('<p>');
+    similarfiles.forEach(function(entry) {
+        div.append(entry[1]["display"] + "<br/>");
+    });
+    div.append('</p>');
+}
+
+  $.ajax({
+      url: "data.php",
+      type: "GET",
+      data: null,
+      processData: false,  // tell jQuery not to process the data
+      contentType: false   // tell jQuery not to set contentType
+    }).done(function(data){
+        var n   = 0;
+        var idx = 0;
+        var lines = data.split('\n');
+            for(var i = 0;i < lines.length;i++){
+                str = lines[i];
+                if (str.length > 0){
+                    if (str.search('azz') > 0){
+                        idx = 0;
+                        n = 1;
+                    }
+                    w = str.split("\t");
+                    if (w.length >= 2){
+                        biais = 0.1;
+                        
+                        a = parseFloat(w[0]) + (Math.random() - 0.5) * biais;
+                        b = parseFloat(w[1]) + (Math.random() - 0.5) * biais;
+                        
+
+
+                        if (n == 0)
+                            listClass.push({ 'x': a,
+                                            'y': b,
+                                            'display': "clas_" + idx++});
+                        if (n == 1)
+                            listJazz.push({  'x': a,
+                                            'y': b,
+                                            'display': "jazz_" + idx++});
+                    }
+                }
+        }
+        console.log(listJazz);
+        $('#container').highcharts().series[0].update();
+        $('#container').highcharts().series[1].update();
+
+        //console.log(data);
+     });
+
+    function getNear(closest, range, n){
+        out = [];
+        closest.forEach(function(p){
+            if (p[0] < range && out.length < n){
+                out.push(p);
+            }
+        });
+        return out;
+    }
+
+var form = document.forms.namedItem("fileinfo");
+form.addEventListener('submit', function(ev) {
+    var fd = new FormData(document.forms.namedItem("fileinfo"));
+
+     $.ajax({
+      url: "upload.php",
+      type: "POST",
+      data: fd,
+      timeout: 60000000,
+      processData: false,  // tell jQuery not to process the data
+      contentType: false   // tell jQuery not to set contentType
+    }).done(function(data){
+        console.log(data);
+        json = jQuery.parseJSON(data);
+        // get the new point //
+        newPoint = {'x': json["x"],
+                    'y': json["y"],
+                    'display': json["filename"]};
+        closest = [];
+
+
+        sgenre = "jazz"; // or class
+        if (json["filename"].search("jazz") < 0)
+            sgenre = "classical";
+
+        bjazz = 0;
+        bclass = 0;
+
+        if (sgenre == "jazz")        
+            bjazz = 0.05;
+        if (sgenre == "classical")        
+            bclass = 0.05;
+
+        listJazz.forEach(function(point){
+            closest.push([biaised_distance([newPoint['x'], newPoint['y']],
+                                   [point['x'], point['y']], bjazz), point]);
+        });
+         listClass.forEach(function(point){
+            closest.push([biaised_distance([newPoint['x'], newPoint['y']],
+                                   [point['x'], point['y']], bclass), point]);
+        });      
+        closest.sort();
+        similar = getNear(closest, 0.15, 5);
+        console.log(similar);
+        listUser.push(newPoint);
+        $('#container').highcharts().series[2].update();
+        $('#container').highcharts().series[2].data[listUser.length - 1].select();
+
+        displayFile(json["filename"], sgenre, json["features"], similar);
+     });
+
+  ev.preventDefault();
+}, false);
+</script>
+	</body>
+</html>

@@ -396,7 +396,6 @@ void	ExtractFeaturesUsingFFT(std::vector<float> &tuple, std::vector<float> &wav_
 	float sum_centroids = 0.;
 	float sum_fundamental_frequencies = 0.;
 
-	//todo
 	//std::cout << "Number of frames: " << wav_data.size() / kBlockSize << std::endl;
 	for (int start_block = 0; (start_block + kBlockSize) < wav_data.size(); start_block += kBlockSize >> 1) {
 		windowed.clear();
@@ -512,36 +511,89 @@ void	FillFeatures(std::vector<float> &tuple, std::string const &song_midi_path,
 	// std::cout << "The number of f0 higher than the average of f0 is : " << tuple[NUMBER_OF_FREQUENCIES_HIGHER_THAN_AVEREAGE_FUNDAMENTAL_FREQUENCY] << std::endl;
 }
 
-std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt) {
+std::string FormatTuple(std::vector<float> const &tuple, enum LabelTypes lt, bool is_multiclass_data_set) {
 	std::string formatted_tuple;
 
 	const int kValenceOffsetFromEnd = 2;
 	const int kArousalOffsetFromEnd = 1;
 
+	if (is_multiclass_data_set) {
 
-	if (lt == LabelTypes::AROUSAL) {
-		formatted_tuple += std::to_string(tuple[tuple.size() - 1]);
-	}
-	else if (lt == LabelTypes::VALENCE) {
-		formatted_tuple += std::to_string(tuple[tuple.size() - 1]);
+		if (lt == LabelTypes::AROUSAL)
+			formatted_tuple += std::to_string(tuple[tuple.size() - kArousalOffsetFromEnd]);
+		else if (lt == LabelTypes::VALENCE)
+			formatted_tuple += std::to_string(tuple[tuple.size() - kValenceOffsetFromEnd]);
 	}
 	else {
-		formatted_tuple += std::to_string(tuple[tuple.size() - kValenceOffsetFromEnd]);
-		formatted_tuple += std::to_string(tuple[tuple.size() - kArousalOffsetFromEnd]);
+		formatted_tuple += std::to_string(tuple[tuple.size() - 1]);
 	}
-	//std::cout << "Tuple size is : " << tuple.size() << std::endl;
-	//std::cout << "The value is " << tuple[tuple.size() - 1] << " & The value written is " << std::to_string(tuple[tuple.size() - 1]) << std::endl;
 
 	int i = 1;
+	int number_of_label = is_multiclass_data_set ? 2 : 1;
 	for (auto const &attribute : tuple) {
-		if (i < tuple.size())
+		if (i <= tuple.size() - number_of_label)
 			formatted_tuple += " " + std::to_string(i++) + ':' + std::to_string(attribute);
 	}
 	return formatted_tuple;
 }
 
+int FindLastLabelIndex(std::vector<std::string> const &output) {
+	int index = 0;
+	for (auto const &line : output) {
+		if  (line.find(':') != std::string::npos)
+			return index - 1;
+		++index;
+	}
+	return index;
+}
+
+void FillFeaturesFromFile(std::vector<std::string> const &output, std::vector<float> &tuple, int index) {
+	int i = 0;
+	for (std::string const &line : output) {
+		if (i > index) {
+			std::vector<std::string> splited_line = Split(line, ':');
+			tuple.push_back(std::atof(splited_line[1].c_str()));
+		}
+		++i;
+	}
+}
+
+void FillLabelsFromFile(std::vector<std::string> const &output, std::vector<float> &tuple, int index) {
+	int i = 0;
+	for (std::string const &line : output) {
+		if (i <= index) {
+			tuple.push_back(std::atof(line.c_str()));
+		}
+		++i;
+	}
+}
+
+std::vector<std::vector<float>> CreateDataSetFromFile(std::string const &filename) {
+	std::ifstream input_file(filename.c_str());
+	std::vector<std::vector<float>> new_data_set;
+
+	if (!input_file.is_open()) {
+		std::cerr << "Cannot open the file " << filename << std::endl;
+		return new_data_set;
+	}
+
+	std::string line;
+	while (std::getline(input_file,line))
+    {
+    	//std::cout << line << std::endl;
+    	Tuple tuple;
+    	std::vector<std::string> output = Split(line, ' ');
+    	int index = FindLastLabelIndex(output);
+    	FillFeaturesFromFile(output, tuple, index);\
+    	FillLabelsFromFile(output, tuple, index);
+    	new_data_set.push_back(tuple);
+    }
+    input_file.close();
+    return new_data_set;
+}
+
 void FormatDatasetAndWriteInFile(std::vector<std::vector<float>> const &data_set, std::string const &filename,
-								 enum LabelTypes lt) {
+								 enum LabelTypes lt, bool is_multiclass_data_set) {
 	std::ofstream output_file_stream(filename.c_str(), std::fstream::out);
 
 	if (!output_file_stream.is_open()) {
@@ -550,13 +602,27 @@ void FormatDatasetAndWriteInFile(std::vector<std::vector<float>> const &data_set
 	}
 
 	for (auto const &tuple : data_set) {
-		std::string line = FormatTuple(tuple, lt);
+		std::string line = FormatTuple(tuple, lt, is_multiclass_data_set);
 		//std::cout << "The line : " << line << std::endl;
 		line += '\n';
 		output_file_stream << line;
 	}
 	output_file_stream.close();
 }
+
+std::vector<std::vector<float>> ScaleDataSet(std::vector<std::vector<float>> const &data_set, enum LabelTypes lt,
+		bool is_multiclass_data_set) {
+	std::string filename = "tmp_files/dataset.dataset";
+	std::string output_filename = "tmp_files/scaled_dataset.dataset";
+
+	//std::cout << "Write the datasets " << std::endl;
+	FormatDatasetAndWriteInFile(data_set, filename, lt, is_multiclass_data_set);
+	std::string cmd = "svm-scale " + filename + " > " + output_filename;
+	//std::cout << "Run svm scaled the datasets " << std::endl;
+	ExecCommand(cmd);
+	return CreateDataSetFromFile(output_filename);
+}
+
 
 typedef struct s_classification_result {
 	std::vector<Tuple> training_set;
@@ -614,7 +680,7 @@ std::string FindFeatureFileName(std::vector<int> const &features_ids, enum SetTy
 }
 
 std::vector<std::vector<float>> CreateDataSetWithSelectedFeatures(std::vector<std::vector<float>> const &data_set,
-		std::vector<int> features_in_use, enum LabelTypes lt) {
+		std::vector<int> features_in_use) {
 
 	std::vector<std::vector<float>> new_data_set;
 	for (auto const &tuple : data_set) {
@@ -622,10 +688,15 @@ std::vector<std::vector<float>> CreateDataSetWithSelectedFeatures(std::vector<st
 		for (auto const &feature : features_in_use) {
 			tuple_with_new_features.push_back(tuple[feature]);
 		}
-		if (lt == VALENCE)
-			tuple_with_new_features.push_back(tuple[kValenceIndex]);
-		else
-			tuple_with_new_features.push_back(tuple[kArousalIndex]);
+		//std::cout << "Le tuple a une taille de : " << tuple.size() << std::endl;
+		//for (auto value : tuple) {
+		//	std::cout << " " << value;
+		//}
+		// //std::cout << std::endl;
+		// if (lt == VALENCE)
+		// 	tuple_with_new_features.push_back(tuple.size() - 1);
+		// else
+		tuple_with_new_features.push_back(tuple[tuple.size() - 1]);
 		new_data_set.push_back(tuple_with_new_features);
 	}
 	return new_data_set;
@@ -636,8 +707,7 @@ std::vector<std::vector<float>> CreateDataSetWithSelectedFeatures(std::vector<st
 // Add Test set and training set here.
 std::vector<struct s_classification_result *> GenerateCombinaisons(
 	std::vector<std::vector<float>> const &training_set,
-	std::vector<std::vector<float>> const &test_set,
-	enum LabelTypes lt, int number_of_features_used) {
+	std::vector<std::vector<float>> const &test_set, int number_of_features_used, enum LabelTypes lt) {
 	std::vector<struct s_classification_result *> combinaisons;
 
 	int const number_of_combinaison = Factorial(NUMBER_OF_FEATURES) /
@@ -649,37 +719,28 @@ std::vector<struct s_classification_result *> GenerateCombinaisons(
 		t_classification_result *result = new t_classification_result;
 		result->lt = lt;
 		result->features_ids = features_in_use;
-		result->training_set = CreateDataSetWithSelectedFeatures(training_set, features_in_use, lt);
-		result->test_set = CreateDataSetWithSelectedFeatures(test_set, features_in_use, lt);
+		result->training_set = CreateDataSetWithSelectedFeatures(training_set, features_in_use);
+		result->test_set = CreateDataSetWithSelectedFeatures(test_set, features_in_use);
 
-		// for (auto const &tuple : data_set) {
-		// 	Tuple tuple_with_new_features;
-		// 	for (auto const &feature : features_in_use) {
-		// 		tuple_with_new_features.push_back(tuple[feature]);
-		// 	}
-		// 	if (lt == VALENCE)
-		// 		tuple_with_new_features.push_back(tuple[kValenceIndex]);
-		// 	else
-		// 		tuple_with_new_features.push_back(tuple[kArousalIndex]);
-		// 	result->data_set.push_back(tuple_with_new_features);
-		// }
+
+		std::string sub_directory = labels_to_string[lt];
 		std::string training_filename = FindFeatureFileName(result->features_ids, TRAINING_SET);
-		std::string training_file_path = kCombinaisonsDirectory + "/" + training_filename;
+		std::string training_file_path = kCombinaisonsDirectory + "/" + sub_directory + "/" + training_filename;
 		std::string test_filename = FindFeatureFileName(result->features_ids, TEST_SET);
-		std::string test_file_path = kCombinaisonsDirectory + "/" +  test_filename;
+		std::string test_file_path = kCombinaisonsDirectory + "/" + sub_directory + "/" + test_filename;
 
-		FormatDatasetAndWriteInFile(result->training_set, training_file_path, lt);
-		FormatDatasetAndWriteInFile(result->test_set, test_file_path, lt);
+		FormatDatasetAndWriteInFile(result->training_set, training_file_path, lt, false);
+		FormatDatasetAndWriteInFile(result->test_set, test_file_path, lt, false);
 		std::string kModelDirectory = "model_files";
 
-std::string kSVMOutputFileDirectory = "svm_output_files";
+		std::string kSVMOutputFileDirectory = "svm_output_files";
 
 		std::string first_cmd = "svm-train -s 4 -t 2 " + training_file_path + " "
-			+ kModelDirectory + "/" + training_filename + ".model";
+			+ kModelDirectory + "/" + sub_directory + "/" + training_filename + ".model";
 		ExecCommand(first_cmd);
 		std::string second_cmd = "svm-predict " + test_file_path + " "
-			+ kModelDirectory + "/" + training_filename + ".model" + " "
-			+ kSVMOutputFileDirectory + "/" + training_filename.substr(0, training_filename.find('.'));
+			+ kModelDirectory + "/" + sub_directory + "/" + training_filename + ".model" + " "
+			+ kSVMOutputFileDirectory + "/" + sub_directory + "/" + training_filename.substr(0, training_filename.find('.'));
 		std::vector<std::string> output = ExecCommand(second_cmd);
 		std::string accuracy_in_string = Split(output[0], ' ')[4];
 		result->accuracy = std::atof(accuracy_in_string.c_str());
@@ -697,7 +758,7 @@ struct s_classification_result *GenerateAllCombinaisonsAndChooseTheBest(
 
 	for (int i = 1; i <= NUMBER_OF_FEATURES; ++i) {
 		std::vector<struct s_classification_result*> results =
-			GenerateCombinaisons(training_set, test_set, lt, i);
+			GenerateCombinaisons(training_set, test_set, i, lt);
 		for (auto &result : results) {
 			if (!best_result)
 				best_result = result;
@@ -718,6 +779,7 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 
 	std::vector<std::vector<float>>	tmp_data_set(data_set);
 
+	//std::cout << "Dataset size : " << data_set.size() << std::endl;
 	int i = 0;
 	int max_test_set = number_of_classical_songs / 4;
 	int max_training_set = number_of_classical_songs - max_test_set;
@@ -729,6 +791,7 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 		test_set.push_back(data_set[i]);
 		++i;
 	}
+
 	max_test_set = number_of_jazz_songs / 4;
 	max_training_set =  number_of_jazz_songs - max_test_set;
 	while (i < number_of_classical_songs + max_training_set) {
@@ -745,10 +808,6 @@ void FillTrainingSetAndTestSet(std::vector<std::vector<float>> const &data_set,
 	if (total_set != data_set.size()) {
 		std::cerr << "Some data set are not either in training set or test set, total set with training and test: " << total_set << " and number of datasets : " << data_set.size() << std::endl;
 	}
-
-	// Mettre le bon path
-	//FormatDatasetAndWriteInFile(training_set, "training_set", lt);
-	//FormatDatasetAndWriteInFile(test_set, "test_set", lt);
 }
 
 void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> const &training_set,
@@ -770,12 +829,29 @@ void GenerateFinalTrainingAndTestSet(std::vector<std::vector<float>> const &trai
 	std::string training_set_filename = FindFeatureFileName(best_result->features_ids, TRAINING_SET);
 	std::string test_set_filename = FindFeatureFileName(best_result->features_ids, TEST_SET);
 
-	std::string cmd = "cp " + kCombinaisonsDirectory + "/" + training_set_filename + " " + 
-			kFinalDataSetDirectory + "/" + std::string(labels_to_string[lt]) + kTrainingSetExtension;
+	std::string training_set_final_path = kFinalDataSetDirectory + "/"
+		+ std::string(labels_to_string[lt]) + kTrainingSetExtension;
+
+	std::string test_set_final_path = kFinalDataSetDirectory +  "/"
+		+ std::string(labels_to_string[lt]) + kTestSetExtension;
+
+	std::string sub_directory = labels_to_string[lt];
+
+	std::string cmd = "cp " + kCombinaisonsDirectory + "/" + sub_directory + "/" + training_set_filename + " "
+		+ training_set_final_path;
 	ExecCommand(cmd);
-	cmd = "cp " + kCombinaisonsDirectory + "/" + test_set_filename + " "
-			+ kFinalDataSetDirectory +  "/" + std::string(labels_to_string[lt]) + kTestSetExtension;
+	cmd = "cp " + kCombinaisonsDirectory +  "/" + sub_directory + "/" + test_set_filename + " "
+		+ test_set_final_path;
 	ExecCommand(cmd);
+
+
+	std::string first_cmd = "svm-train -s 4 -t 2 " + training_set_final_path + " "
+		+ training_set_final_path + ".model";
+	ExecCommand(first_cmd);
+	std::string second_cmd = "svm-predict " + test_set_final_path + " "
+		+ training_set_final_path + ".model" + " "
+		+ training_set_final_path + ".output";
+	ExecCommand(second_cmd);
 }
 
 void FillLabels(std::vector<std::vector<float>> &data_set) {
@@ -784,10 +860,15 @@ void FillLabels(std::vector<std::vector<float>> &data_set) {
 	//std::cout << "La size de l'ouput est de : " << output.size() << std::endl;
 	//std::cout << "La size du data_set est de : " << data_set.size() << std::endl;
 	int i = 0;
+	//std::cout << "La size du data set est de : " << data_set.size() << std::endl;
 	for (auto &tuple : data_set) {
-		tuple[kValenceIndex] = std::atof(output[i].c_str());
-		tuple[kArousalIndex] = std::atof(output[i + 1].c_str());
-		i += 2;
+		std::vector<std::string> splited_line = Split(output[i], '\t');
+		tuple[kValenceIndex] = std::atof(splited_line[0].c_str());
+		tuple[kArousalIndex] = std::atof(splited_line[1].c_str());
+
+		//std::cout << "La valence du tuple est de  " << tuple[kValenceIndex] << std::endl;
+		//std::cout << "La arousal du tuple est de  " << tuple[kArousalIndex] << std::endl;
+		++i;
 	}
 }
 
@@ -798,7 +879,6 @@ void	UpdateNumberSongsByGender(const std::vector<float> &tuple, int &number_of_c
 		++number_of_classical_songs;
 	}
 }
-
 
 std::string file_dir = "data/";
 
@@ -818,6 +898,15 @@ void displayTupleJSON(std::vector<float> tuple){
 	std::cout << "]" << std::endl;
 }
 
+Tuple StringToTuple(std::string tuple_in_string) {
+	Tuple tuple;
+
+	std::vector<std::string> output = Split(tuple_in_string, ' ');
+    int index = FindLastLabelIndex(output);
+    FillFeaturesFromFile(output, tuple, index);\
+    FillLabelsFromFile(output, tuple, index);
+    return tuple;
+}
 
 // extract features, displays them, evaluates the file
 
@@ -828,14 +917,40 @@ int runtime_main(int ac, char **av){
 	}
 	std::vector<float> tuple;
 	std::string filename = av[1];
-
-	FillFeatures(tuple, file_dir + filename + ".mid", file_dir + filename + "_trimmed.wav");
-
 	std::vector<std::vector<float>> tuple_set;
 
+	std::vector<std::vector<float>> arousal_set = CreateDataSetFromFile("final_datasets/complete_dataset_AROUSAL.dataset");
+	std::vector<std::vector<float>> valence_set = CreateDataSetFromFile("final_datasets/complete_dataset_VALENCE.dataset");;
+
+
+	FillFeatures(tuple, file_dir + filename + ".mid", file_dir + filename + "_trimmed.wav");
 	tuple_set.push_back(tuple);
-	FormatDatasetAndWriteInFile(tuple_set, "test_files/my_arousal", AROUSAL);
-	FormatDatasetAndWriteInFile(tuple_set, "test_files/my_valence", VALENCE);
+	FillLabels(tuple_set);
+	std::vector<float> tuple_arousal = StringToTuple(FormatTuple(tuple, AROUSAL, true));
+	std::vector<float> tuple_valence = StringToTuple(FormatTuple(tuple, VALENCE, true));
+
+	arousal_set.push_back(tuple_arousal);
+	valence_set.push_back(tuple_valence);
+
+	arousal_set = ScaleDataSet(arousal_set, AROUSAL, false);
+	valence_set = ScaleDataSet(valence_set, VALENCE, false);
+
+
+
+	tuple_valence = valence_set[valence_set.size() - 1];
+	tuple_arousal = arousal_set[arousal_set.size() - 1];
+
+	std::vector<std::vector<float>> tuple_set_a;
+	std::vector<std::vector<float>> tuple_set_v;
+	
+	tuple_set_a.push_back(tuple_arousal);
+	tuple_set_v.push_back(tuple_valence);
+
+	tuple_set_a = CreateDataSetWithSelectedFeatures(tuple_set_a, {10, 7, 5, 4, 2, 1, 0});
+	tuple_set_v = CreateDataSetWithSelectedFeatures(tuple_set_v, {10, 9, 8, 5, 4, 2, 1});
+
+	FormatDatasetAndWriteInFile(tuple_set_a, "test_files/my_arousal", AROUSAL, 0);
+	FormatDatasetAndWriteInFile(tuple_set_v, "test_files/my_valence", VALENCE, 0);
 
 	ExecCommand("svm-predict test_files/my_arousal final_datasets/AROUSAL.dataset.model output_files/output_arousal");
 	ExecCommand("svm-predict test_files/my_valence final_datasets/VALENCE.dataset.model output_files/output_valence");
@@ -853,11 +968,12 @@ int main(int ac, char **av) {
 	//
 	return runtime_main(ac, av);
 	//
-
 	std::set<std::string> files;
 	std::vector<std::vector<float>> data_set;
-	std::vector<std::vector<float>> training_set;
-	std::vector<std::vector<float>> test_set;
+	std::vector<std::vector<float>> arousal_training_set;
+	std::vector<std::vector<float>> arousal_test_set;
+	std::vector<std::vector<float>> valence_training_set;
+	std::vector<std::vector<float>> valence_test_set;
 	int	number_of_classical_songs = 0;
 	int number_of_jazz_songs = 0;
 
@@ -866,12 +982,14 @@ int main(int ac, char **av) {
 		return 1;
 	}
 	
-	int song_limit = 20;
+	//int song_limit = 20;
 	std::string	directory_path = av[1] + std::string("/");
 	GetSongsInDirectory(directory_path, files);
+	std::cout << "FILES: " << files.size() << std::endl;
 
-	int i = 0;
-	for (auto it = files.begin(); it != files.end() && i < song_limit; ++it, ++i) {
+	//int i = 0;
+	for (auto it = files.begin(); it != files.end(); //&& i < song_limit;
+		 ++it) {//, ++i) {
 		std::vector<float> tuple;
 		std::string midi_file = *it;
 		std::string wav_file = *(++it);
@@ -886,12 +1004,22 @@ int main(int ac, char **av) {
 	std::cout << "Feature filled now filling labels." << std::endl;
 	FillLabels(data_set);
 
-	std::cout << "labels filled now creating training and test set." << std::endl;
-	FillTrainingSetAndTestSet(data_set, training_set, test_set, number_of_classical_songs, number_of_jazz_songs);
+	std::cout << "Scaling the datasets " << std::endl;
 
-	std::cout << "Size of training set: " << training_set.size() << ", size of test set: " << test_set.size() << std::endl;		
-	std::cout << "Training and test set done now finding best combinaisons." << std::endl;
-	GenerateFinalTrainingAndTestSet(training_set, test_set, VALENCE);
-	//GenerateFinalTrainingAndTestSet(training_set, test_set, AROUSAL);
+	std::vector<std::vector<float>> arousal_data_set = ScaleDataSet(data_set, AROUSAL, true);
+	std::vector<std::vector<float>> valence_data_set = ScaleDataSet(data_set, VALENCE, true);
+
+	std::cout << "Scaling the datasets endl" << std::endl;
+
+	// std::cout << "labels filled now creating training and test set." << std::endl;
+	FillTrainingSetAndTestSet(arousal_data_set, arousal_training_set, arousal_test_set, number_of_classical_songs, number_of_jazz_songs);
+	FillTrainingSetAndTestSet(valence_data_set, valence_training_set, valence_test_set, number_of_classical_songs, number_of_jazz_songs);
+
+	std::cout << "Size of arousal training set: " << arousal_training_set.size() << ", size of arousal_test set: " << arousal_test_set.size() << std::endl;		
+	std::cout << "Size of valence training set: " << valence_training_set.size() << ", size of valence_test set: " << valence_test_set.size() << std::endl;		
+
+	// std::cout << "Training and test set done now finding best combinaisons." << std::endl;
+	GenerateFinalTrainingAndTestSet(valence_training_set, valence_test_set, VALENCE);
+	GenerateFinalTrainingAndTestSet(arousal_training_set, arousal_test_set, AROUSAL);
     return 0;
 }

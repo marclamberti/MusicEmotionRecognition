@@ -837,8 +837,8 @@ int runtime_main(int ac, char **av){
 	FormatDatasetAndWriteInFile(tuple_set, "test_files/my_arousal", AROUSAL);
 	FormatDatasetAndWriteInFile(tuple_set, "test_files/my_valence", VALENCE);
 
-	ExecCommand("svm-predict test_files/my_arousal model_files/F3_8_4_0.dataset.model output_files/output_arousal");
-	ExecCommand("svm-predict test_files/my_valence model_files/F3_8_6_1.dataset.model output_files/output_valence");
+	ExecCommand("svm-predict test_files/my_arousal final_datasets/AROUSAL.dataset.model output_files/output_arousal");
+	ExecCommand("svm-predict test_files/my_valence final_datasets/VALENCE.dataset.model output_files/output_valence");
 
 	std::cout << "{\"filename\": \"" << filename << "\", \"features\": " << std::endl;
 	displayTupleJSON(tuple);

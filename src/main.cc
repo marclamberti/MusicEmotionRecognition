@@ -568,6 +568,16 @@ void FillLabelsFromFile(std::vector<std::string> const &output, std::vector<floa
 	}
 }
 
+Tuple StringToTuple(std::string tuple_in_string) {
+	Tuple tuple;
+
+	std::vector<std::string> output = Split(tuple_in_string, ' ');
+    int index = FindLastLabelIndex(output);
+    FillFeaturesFromFile(output, tuple, index);\
+    FillLabelsFromFile(output, tuple, index);
+    return tuple;
+}
+
 std::vector<std::vector<float>> CreateDataSetFromFile(std::string const &filename) {
 	std::ifstream input_file(filename.c_str());
 	std::vector<std::vector<float>> new_data_set;

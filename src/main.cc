@@ -688,14 +688,6 @@ std::vector<std::vector<float>> CreateDataSetWithSelectedFeatures(std::vector<st
 		for (auto const &feature : features_in_use) {
 			tuple_with_new_features.push_back(tuple[feature]);
 		}
-		//std::cout << "Le tuple a une taille de : " << tuple.size() << std::endl;
-		//for (auto value : tuple) {
-		//	std::cout << " " << value;
-		//}
-		// //std::cout << std::endl;
-		// if (lt == VALENCE)
-		// 	tuple_with_new_features.push_back(tuple.size() - 1);
-		// else
 		tuple_with_new_features.push_back(tuple[tuple.size() - 1]);
 		new_data_set.push_back(tuple_with_new_features);
 	}
@@ -917,22 +909,24 @@ int main(int ac, char **av) {
 	std::cout << "Feature filled now filling labels." << std::endl;
 	FillLabels(data_set);
 
+	FormatDatasetAndWriteInFile(data_set, "final_datasets/complete_dataset_AROUSAL.dataset", AROUSAL, true);
+	FormatDatasetAndWriteInFile(data_set, "final_datasets/complete_dataset_VALENCE.dataset", VALENCE, true);	
 	std::cout << "Scaling the datasets " << std::endl;
 
-	std::vector<std::vector<float>> arousal_data_set = ScaleDataSet(data_set, AROUSAL, true);
-	std::vector<std::vector<float>> valence_data_set = ScaleDataSet(data_set, VALENCE, true);
+	// std::vector<std::vector<float>> arousal_data_set = ScaleDataSet(data_set, AROUSAL, true);
+	// std::vector<std::vector<float>> valence_data_set = ScaleDataSet(data_set, VALENCE, true);
 
-	std::cout << "Scaling the datasets endl" << std::endl;
+	// std::cout << "Scaling the datasets endl" << std::endl;
 
-	// std::cout << "labels filled now creating training and test set." << std::endl;
-	FillTrainingSetAndTestSet(arousal_data_set, arousal_training_set, arousal_test_set, number_of_classical_songs, number_of_jazz_songs);
-	FillTrainingSetAndTestSet(valence_data_set, valence_training_set, valence_test_set, number_of_classical_songs, number_of_jazz_songs);
+	// // std::cout << "labels filled now creating training and test set." << std::endl;
+	// FillTrainingSetAndTestSet(arousal_data_set, arousal_training_set, arousal_test_set, number_of_classical_songs, number_of_jazz_songs);
+	// FillTrainingSetAndTestSet(valence_data_set, valence_training_set, valence_test_set, number_of_classical_songs, number_of_jazz_songs);
 
-	std::cout << "Size of arousal training set: " << arousal_training_set.size() << ", size of arousal_test set: " << arousal_test_set.size() << std::endl;		
-	std::cout << "Size of valence training set: " << valence_training_set.size() << ", size of valence_test set: " << valence_test_set.size() << std::endl;		
+	// std::cout << "Size of arousal training set: " << arousal_training_set.size() << ", size of arousal_test set: " << arousal_test_set.size() << std::endl;		
+	// std::cout << "Size of valence training set: " << valence_training_set.size() << ", size of valence_test set: " << valence_test_set.size() << std::endl;		
 
-	// std::cout << "Training and test set done now finding best combinaisons." << std::endl;
-	GenerateFinalTrainingAndTestSet(valence_training_set, valence_test_set, VALENCE);
-	GenerateFinalTrainingAndTestSet(arousal_training_set, arousal_test_set, AROUSAL);
-    return 0;
+	// // std::cout << "Training and test set done now finding best combinaisons." << std::endl;
+	// GenerateFinalTrainingAndTestSet(valence_training_set, valence_test_set, VALENCE);
+	// GenerateFinalTrainingAndTestSet(arousal_training_set, arousal_test_set, AROUSAL);
+ //    return 0;
 }
